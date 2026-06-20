@@ -70,7 +70,7 @@ This publishes `dist` to the `gh-pages` branch.
 
 Live site URL after deploy:
 
-https://bleedingrobot.github.io/wowloot/
+[Live Site (GitHub Pages)](https://bleedingrobot.github.io/wowloot/)
 
 ## Architecture Notes
 
