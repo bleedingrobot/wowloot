@@ -147,7 +147,12 @@ function SettingsPage() {
     const next = [...nitPaths, trimmed];
     savePaths(next);
     setNitPathInput("");
-    setSyncMessage("NovaInstanceTracker path added.");
+    const hintedAccount = getUniqueAccountHint(next);
+    if (hintedAccount) {
+      setSyncMessage(`Path added. Account hint detected: ${hintedAccount}.`);
+    } else {
+      setSyncMessage("Path added. Connect files to allow direct updates.");
+    }
   };
 
   const removePath = (pathToRemove) => {
@@ -423,8 +428,8 @@ function SettingsPage() {
           <div className="panel">
             <h3>NovaInstanceTracker Sync</h3>
             <p>
-              Save one or more Lua file paths for reference, then click Update to import saved raid
-              lockouts.
+              Add Path stores a reference and account hint only. Browsers cannot read local files
+              by path on hosted sites, so click Connect Nova Files once for one-click updates.
             </p>
             <input
               value={nitPathInput}
