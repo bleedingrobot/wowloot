@@ -7,6 +7,7 @@ import { addLootItem, deleteLootItem, updateLootItem } from "../services/dataSer
 function LootPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
+  const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
 
   const [form, setForm] = useState({
     characterId: "",
@@ -38,6 +39,13 @@ function LootPage() {
     setForm((prev) => ({ ...prev, itemName: "", iconUrl: "" }));
   };
 
+  const formatCharacterLabel = (character) => {
+    const accountName = character.accountId
+      ? accountNameById.get(character.accountId) || "Unknown account"
+      : "Unassigned";
+    return `${character.name} | ${character.realm || "Unknown realm"} | ${accountName}`;
+  };
+
   return (
     <section className="split-grid">
       <article className="panel">
@@ -50,7 +58,7 @@ function LootPage() {
             <option value="">Select character</option>
             {data.characters.map((character) => (
               <option key={character.id} value={character.id}>
-                {character.name}
+                {formatCharacterLabel(character)}
               </option>
             ))}
           </select>
