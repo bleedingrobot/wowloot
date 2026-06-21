@@ -3,10 +3,12 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   query,
   setDoc,
   updateDoc,
+  writeBatch,
   where
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -81,6 +83,37 @@ export function updateLootItem(lootId, payload) {
 
 export function deleteLootItem(lootId) {
   return deleteDoc(doc(db, COLLECTIONS.lootItems, lootId));
+}
+
+export async function deleteAllUserData(uid) {
+  if (!db || !uid) {
+    return;
+  }
+
+  const names = Object.values(COLLECTIONS);
+  const snapshots = await Promise.all(
+    names.map((name) => getDocs(query(collection(db, name), where("userId", "==", uid))))
+  );
+
+  let batch = writeBatch(db);
+  let opCount = 0;
+
+  for (const snapshot of snapshots) {
+    for (const item of snapshot.docs) {
+      batch.delete(item.ref);
+      opCount += 1;
+
+      if (opCount === 450) {
+        await batch.commit();
+        batch = writeBatch(db);
+        opCount = 0;
+      }
+    }
+  }
+
+  if (opCount > 0) {
+    await batch.commit();
+  }
 }
 
 export { COLLECTIONS };

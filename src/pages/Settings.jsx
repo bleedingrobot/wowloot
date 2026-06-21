@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
-import { addAccount, addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
+import {
+  addAccount,
+  addCharacter,
+  deleteAllUserData,
+  updateCharacter,
+  upsertRaidStatus
+} from "../services/dataService";
 import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
@@ -76,6 +82,7 @@ function SettingsPage() {
   const [nitPaths, setNitPaths] = useState([]);
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
   const [connectedFileNames, setConnectedFileNames] = useState([]);
   const fileInputRef = useRef(null);
@@ -346,6 +353,34 @@ function SettingsPage() {
     }
   };
 
+  const onDeleteAllData = async () => {
+    if (!user || isDeletingAll) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Delete ALL your app data (accounts, characters, loot, and raid lockouts)? This cannot be undone."
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeletingAll(true);
+    setSyncMessage("Deleting all data...");
+    try {
+      await deleteAllUserData(user.uid);
+      localStorage.removeItem(NIT_PATHS_KEY);
+      await saveConnectedHandles([]);
+      setNitPaths([]);
+      setConnectedFileNames([]);
+      setSyncMessage("All data deleted.");
+    } catch {
+      setSyncMessage("Delete failed. Please try again.");
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
   return (
     <section className="panel">
       <h2>Settings</h2>
@@ -441,6 +476,14 @@ function SettingsPage() {
 
           <button type="button" onClick={signOutUser}>
             Sign Out
+          </button>
+          <button
+            type="button"
+            className="danger"
+            onClick={onDeleteAllData}
+            disabled={isDeletingAll}
+          >
+            {isDeletingAll ? "Deleting..." : "Delete All Data"}
           </button>
         </div>
       ) : (
