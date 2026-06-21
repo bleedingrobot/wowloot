@@ -119,6 +119,7 @@ function DashboardPage() {
   const [factionFilter, setFactionFilter] = useState("all");
   const [realmFilter, setRealmFilter] = useState("all");
   const [accountFilter, setAccountFilter] = useState("all");
+  const [minLevelFilter, setMinLevelFilter] = useState("");
   const [needFilter, setNeedFilter] = useState("needed");
   const [availabilityFilter, setAvailabilityFilter] = useState("any");
 
@@ -238,6 +239,11 @@ function DashboardPage() {
       const realmMatch = realmFilter === "all" || entry.character.realm === realmFilter;
       const accountValue = entry.character.accountId || "unassigned";
       const accountMatch = accountFilter === "all" || accountValue === accountFilter;
+      const levelThreshold = Number(minLevelFilter);
+      const hasLevelThreshold = minLevelFilter !== "" && !Number.isNaN(levelThreshold);
+      const levelValue = Number(entry.character.level);
+      const levelMatch =
+        !hasLevelThreshold || (!Number.isNaN(levelValue) && levelValue > levelThreshold);
       const nameMatch =
         !searchTerm.trim() || normalize(entry.character.name).includes(normalize(searchTerm));
 
@@ -248,6 +254,7 @@ function DashboardPage() {
         && factionMatch
         && realmMatch
         && accountMatch
+        && levelMatch
         && nameMatch
       );
     });
@@ -261,6 +268,7 @@ function DashboardPage() {
     factionFilter,
     realmFilter,
     accountFilter,
+    minLevelFilter,
     searchTerm
   ]);
 
@@ -510,6 +518,7 @@ function DashboardPage() {
     setFactionFilter("all");
     setRealmFilter("all");
     setAccountFilter("all");
+    setMinLevelFilter("");
     setNeedFilter("needed");
     setAvailabilityFilter("any");
   };
@@ -593,6 +602,14 @@ function DashboardPage() {
             </option>
           ))}
         </select>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={minLevelFilter}
+          onChange={(event) => setMinLevelFilter(event.target.value)}
+          placeholder="Level > X"
+        />
         <button type="button" onClick={resetFilters} className="secondary-btn">
           Clear
         </button>

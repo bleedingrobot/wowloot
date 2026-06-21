@@ -342,7 +342,7 @@ button.danger {
 .dashboard-filters {
   margin-top: 0.7rem;
   display: grid;
-  grid-template-columns: 1.2fr repeat(6, minmax(120px, 1fr)) auto;
+  grid-template-columns: 1.2fr repeat(7, minmax(120px, 1fr)) auto;
   gap: 0.45rem;
   align-items: center;
 }
