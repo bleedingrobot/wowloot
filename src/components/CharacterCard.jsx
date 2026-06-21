@@ -1,7 +1,7 @@
 import ProgressBar from "./ProgressBar";
 import { FALLBACK_ICON } from "../utils/classIcons";
 
-function CharacterCard({ character, metrics, raidSummary, classIcon, completion }) {
+function CharacterCard({ character, metrics, raidSummary, raidItemsByRaid, classIcon, completion }) {
 
   return (
     <article className="character-card">
@@ -20,7 +20,6 @@ function CharacterCard({ character, metrics, raidSummary, classIcon, completion 
             {character.class} | {character.faction} | {character.realm}
           </p>
         </div>
-        <div className="urgency-badge">Urgency {metrics.score}</div>
       </header>
 
       <section className="card-stats">
@@ -32,6 +31,17 @@ function CharacterCard({ character, metrics, raidSummary, classIcon, completion 
       <section>
         <p className="summary-title">Raid Needs</p>
         <p>{raidSummary}</p>
+        {raidItemsByRaid?.length ? (
+          <ul className="raid-item-list">
+            {raidItemsByRaid.map((raidEntry) => (
+              <li key={raidEntry.raidName}>
+                <strong>{raidEntry.raidName}:</strong> {raidEntry.items.join(", ")}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="raid-item-empty">No wishlist items in currently available raids.</p>
+        )}
       </section>
 
       <section>

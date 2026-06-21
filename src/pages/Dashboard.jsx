@@ -16,10 +16,11 @@ function DashboardPage() {
   const sorted = useMemo(() => {
     const entries = data.characters.map((character) => {
       const lootItems = data.lootItems.filter((item) => item.characterId === character.id);
+      const remainingLootItems = lootItems.filter((item) => !item.obtained);
       const raidStatuses = data.raidStatuses.filter((status) => status.characterId === character.id);
       const metrics = calculateUrgency(lootItems, raidStatuses);
 
-      const dueRaids = RAIDS.filter((raid) => {
+      const availableRaids = RAIDS.filter((raid) => {
         const status = raidStatuses.find((s) => s.raidName === raid.name);
         if (!status) {
           return true;
@@ -28,13 +29,35 @@ function DashboardPage() {
           return true;
         }
         return status.resetDate ? new Date(status.resetDate) <= new Date() : true;
-      }).length;
+      });
+
+      const raidSummary = availableRaids.length
+        ? availableRaids.map((raid) => raid.short).join(", ")
+        : "All raids currently locked";
+
+      const raidItemsByRaid = availableRaids
+        .map((raid) => {
+          const raidItems = remainingLootItems
+            .filter((item) => item.raidName === raid.name)
+            .map((item) => item.itemName);
+
+          if (!raidItems.length) {
+            return null;
+          }
+
+          return {
+            raidName: raid.short,
+            items: raidItems
+          };
+        })
+        .filter(Boolean);
 
       return {
         character,
         metrics,
         completion: metrics.totalLoot ? Math.round((metrics.obtained / metrics.totalLoot) * 100) : 0,
-        raidSummary: `${dueRaids} raids currently available`,
+        raidSummary,
+        raidItemsByRaid,
         classIcon: getClassIcon(character.class)
       };
     });
@@ -71,6 +94,7 @@ function DashboardPage() {
               character={entry.character}
               metrics={entry.metrics}
               raidSummary={entry.raidSummary}
+              raidItemsByRaid={entry.raidItemsByRaid}
               classIcon={entry.classIcon}
               completion={entry.completion}
             />
