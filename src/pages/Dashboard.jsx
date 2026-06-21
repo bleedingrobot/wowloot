@@ -15,6 +15,7 @@ const NIT_HANDLE_STORE = "handles";
 const NIT_HANDLE_KEY = "nova-files";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
 const NIT_AUTO_SYNC_ENABLED_KEY = "nit_auto_sync_enabled";
+const NIT_CONNECTED_FILE_META_KEY = "nit_connected_file_meta";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -63,6 +64,19 @@ function getSelectedConnectedFileIndexes() {
 function isAutoSyncEnabled() {
   const raw = localStorage.getItem(NIT_AUTO_SYNC_ENABLED_KEY);
   return raw !== "false";
+}
+
+function getConnectedFileMeta() {
+  try {
+    const raw = localStorage.getItem(NIT_CONNECTED_FILE_META_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 function openHandleDb() {
@@ -264,19 +278,29 @@ function DashboardPage() {
     try {
       const accountHintName = getSavedPathAccountHint();
       const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
-      let hintAccountId = "";
-      if (accountHintName) {
-        const normalized = normalize(accountHintName);
-        hintAccountId = accountMap.get(normalized) || "";
-        if (!hintAccountId) {
-          const created = await addAccount(user.uid, accountHintName);
-          hintAccountId = created.id;
-          accountMap.set(normalized, hintAccountId);
-        }
-      }
+      const parsedCharacters = [];
+      const parsed = [];
 
-      const parsedCharacters = luaTexts.flatMap((text) => parseNovaCharacters(text));
-      const parsed = luaTexts.flatMap((text) => parseNovaSavedInstances(text));
+      for (const source of luaTexts) {
+        const sourceAccount = (source.accountHintName || accountHintName || "").trim();
+        let sourceAccountId = "";
+        if (sourceAccount) {
+          const normalized = normalize(sourceAccount);
+          sourceAccountId = accountMap.get(normalized) || "";
+          if (!sourceAccountId) {
+            const created = await addAccount(user.uid, sourceAccount);
+            sourceAccountId = created.id;
+            accountMap.set(normalized, sourceAccountId);
+          }
+        }
+
+        const parsedFromSource = parseNovaCharacters(source.text).map((entry) => ({
+          ...entry,
+          accountId: sourceAccountId
+        }));
+        parsedCharacters.push(...parsedFromSource);
+        parsed.push(...parseNovaSavedInstances(source.text));
+      }
 
       const dedupedParsedCharacters = new Map();
       parsedCharacters.forEach((entry) => {
@@ -290,7 +314,7 @@ function DashboardPage() {
         data.characters.map((character) => [characterKey(character.name, character.realm), character])
       );
       const createdCharacters = [];
-      const defaultAccountId = hintAccountId || (data.accounts.length === 1 ? data.accounts[0].id : "");
+      const defaultAccountId = data.accounts.length === 1 ? data.accounts[0].id : "";
 
       for (const parsedCharacter of dedupedParsedCharacters.values()) {
         const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
@@ -393,9 +417,21 @@ function DashboardPage() {
       }
 
       const selectedIndexes = getSelectedConnectedFileIndexes();
+      const meta = getConnectedFileMeta();
       const selectedHandles = selectedIndexes.length
         ? selectedIndexes.map((index) => handles[index]).filter(Boolean)
         : handles;
+      const selectedSources = selectedIndexes.length
+        ? selectedIndexes
+            .map((index) => ({
+              handle: handles[index],
+              accountHintName: meta[index]?.accountName || ""
+            }))
+            .filter((entry) => entry.handle)
+        : handles.map((handle, index) => ({
+            handle,
+            accountHintName: meta[index]?.accountName || ""
+          }));
 
       if (!selectedHandles.length) {
         if (!silent) {
@@ -405,8 +441,9 @@ function DashboardPage() {
         return;
       }
 
-      const texts = [];
-      for (const handle of selectedHandles) {
+      const sources = [];
+      for (const source of selectedSources) {
+        const handle = source.handle;
         let permission = "granted";
         if (handle.queryPermission) {
           permission = await handle.queryPermission({ mode: "read" });
@@ -431,10 +468,10 @@ function DashboardPage() {
         }
 
         const file = await handle.getFile();
-        texts.push(await file.text());
+        sources.push({ text: await file.text(), accountHintName: source.accountHintName });
       }
 
-      await syncFromLuaTexts(texts, { silent });
+      await syncFromLuaTexts(sources, { silent });
     } catch {
       setSyncStatus("warn");
       if (!silent) {

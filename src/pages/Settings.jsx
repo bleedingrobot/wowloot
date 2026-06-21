@@ -17,6 +17,7 @@ const NIT_HANDLE_STORE = "handles";
 const NIT_HANDLE_KEY = "nova-files";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
 const NIT_AUTO_SYNC_ENABLED_KEY = "nit_auto_sync_enabled";
+const NIT_CONNECTED_FILE_META_KEY = "nit_connected_file_meta";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -118,6 +119,23 @@ async function mergeConnectedHandles(existingHandles, newHandles) {
   return merged;
 }
 
+function readConnectedFileMeta() {
+  try {
+    const raw = localStorage.getItem(NIT_CONNECTED_FILE_META_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveConnectedFileMeta(meta) {
+  localStorage.setItem(NIT_CONNECTED_FILE_META_KEY, JSON.stringify(meta));
+}
+
 function SettingsPage() {
   const { user, hasFirebaseConfig, signInWithGoogle, signOutUser } = useAuth();
   const { data } = useUserCollections(user?.uid);
@@ -178,6 +196,7 @@ function SettingsPage() {
     loadConnectedHandles()
       .then((handles) => {
         const selectedIndexes = readSelectedFileIndexes();
+        const meta = readConnectedFileMeta();
         const selectedSet = new Set(selectedIndexes);
         const hasSelection = selectedSet.size > 0;
 
@@ -186,6 +205,7 @@ function SettingsPage() {
             id: `${handle?.name || "file"}-${index}`,
             name: handle?.name || "Unknown file",
             selected: hasSelection ? selectedSet.has(index) : true,
+            accountName: meta[index]?.accountName || "",
             handle
           }))
         );
@@ -265,7 +285,7 @@ function SettingsPage() {
     }
   };
 
-  const syncFromLuaTexts = async (luaTexts, accountHintName = "") => {
+  const syncFromLuaTexts = async (sources) => {
     if (!user) {
       return;
     }
@@ -275,19 +295,29 @@ function SettingsPage() {
 
     try {
       const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
-      let hintAccountId = "";
-      if (accountHintName) {
-        const normalized = normalize(accountHintName);
-        hintAccountId = accountMap.get(normalized) || "";
-        if (!hintAccountId) {
-          const created = await addAccount(user.uid, accountHintName);
-          hintAccountId = created.id;
-          accountMap.set(normalized, hintAccountId);
-        }
-      }
+      const parsedCharacters = [];
+      const parsed = [];
 
-      const parsedCharacters = luaTexts.flatMap((text) => parseNovaCharacters(text));
-      const parsed = luaTexts.flatMap((text) => parseNovaSavedInstances(text));
+      for (const source of sources) {
+        const sourceAccount = (source.accountHintName || "").trim();
+        let sourceAccountId = "";
+        if (sourceAccount) {
+          const normalized = normalize(sourceAccount);
+          sourceAccountId = accountMap.get(normalized) || "";
+          if (!sourceAccountId) {
+            const created = await addAccount(user.uid, sourceAccount);
+            sourceAccountId = created.id;
+            accountMap.set(normalized, sourceAccountId);
+          }
+        }
+
+        const parsedFromSource = parseNovaCharacters(source.text).map((entry) => ({
+          ...entry,
+          accountId: sourceAccountId
+        }));
+        parsedCharacters.push(...parsedFromSource);
+        parsed.push(...parseNovaSavedInstances(source.text));
+      }
 
       const dedupedParsedCharacters = new Map();
       parsedCharacters.forEach((entry) => {
@@ -301,7 +331,7 @@ function SettingsPage() {
         data.characters.map((character) => [characterKey(character.name, character.realm), character])
       );
       const createdCharacters = [];
-      const defaultAccountId = hintAccountId || (data.accounts.length === 1 ? data.accounts[0].id : "");
+      const defaultAccountId = data.accounts.length === 1 ? data.accounts[0].id : "";
 
       for (const parsedCharacter of dedupedParsedCharacters.values()) {
         const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
@@ -410,7 +440,13 @@ function SettingsPage() {
     }
 
     try {
+      const accountHintInput = window.prompt("Account name for these files (example: JAMESRILEY)", "");
+      if (accountHintInput === null) {
+        return;
+      }
+      const accountHintName = accountHintInput.trim();
       const existingHandles = await loadConnectedHandles();
+      const existingMeta = readConnectedFileMeta();
       const handles = await window.showOpenFilePicker({
         multiple: true,
         types: [
@@ -424,13 +460,20 @@ function SettingsPage() {
       });
 
       const merged = await mergeConnectedHandles(existingHandles, handles);
+      const addedCount = merged.length - existingHandles.length;
+      const nextMeta = [...existingMeta];
+      for (let index = 0; index < addedCount; index += 1) {
+        nextMeta.push({ accountName: accountHintName });
+      }
 
       await saveConnectedHandles(merged);
+      saveConnectedFileMeta(nextMeta);
       setConnectedFiles(
         merged.map((handle, index) => ({
           id: `${handle?.name || "file"}-${index}`,
           name: handle?.name || "Unknown file",
           selected: true,
+          accountName: nextMeta[index]?.accountName || "",
           handle
         }))
       );
@@ -444,21 +487,21 @@ function SettingsPage() {
   };
 
   const onUpdateFromConnectedFiles = async (silent = false) => {
-    const accountHintName = getUniqueAccountHint(nitPaths);
     try {
-      const selectedHandles = connectedFiles
+      const selectedSources = connectedFiles
         .filter((item) => item.selected)
-        .map((item) => item.handle);
+        .map((item) => ({ handle: item.handle, accountHintName: item.accountName }));
 
-      if (!selectedHandles.length) {
+      if (!selectedSources.length) {
         if (!silent) {
           setSyncMessage("Select at least one connected Nova file to sync.");
         }
         return;
       }
 
-      const texts = [];
-      for (const handle of selectedHandles) {
+      const sources = [];
+      for (const source of selectedSources) {
+        const handle = source.handle;
         let permission = "granted";
         if (handle.queryPermission) {
           permission = await handle.queryPermission({ mode: "read" });
@@ -471,10 +514,13 @@ function SettingsPage() {
         }
 
         const file = await handle.getFile();
-        texts.push(await file.text());
+        sources.push({
+          text: await file.text(),
+          accountHintName: source.accountHintName
+        });
       }
 
-      await syncFromLuaTexts(texts, accountHintName);
+      await syncFromLuaTexts(sources);
     } catch {
       if (!silent) {
         setSyncMessage("Could not read selected connected files. Reconnect files and try again.");
@@ -497,6 +543,7 @@ function SettingsPage() {
     const next = connectedFiles.filter((item) => item.id !== id);
     setConnectedFiles(next);
     await saveConnectedHandles(next.map((item) => item.handle));
+    saveConnectedFileMeta(next.map((item) => ({ accountName: item.accountName || "" })));
     const selectedIndexes = next
       .map((item, index) => (item.selected ? index : -1))
       .filter((value) => value >= 0);
@@ -542,6 +589,7 @@ function SettingsPage() {
     try {
       await deleteAllUserData(user.uid);
       localStorage.removeItem(NIT_PATHS_KEY);
+      localStorage.removeItem(NIT_CONNECTED_FILE_META_KEY);
       await saveConnectedHandles([]);
       setNitPaths([]);
       setConnectedFiles([]);
@@ -611,7 +659,7 @@ function SettingsPage() {
                         checked={item.selected}
                         onChange={(event) => onToggleConnectedFile(item.id, event.target.checked)}
                       />
-                      {item.name}
+                      {item.name}{item.accountName ? ` (${item.accountName})` : ""}
                     </label>
                     <button
                       type="button"
