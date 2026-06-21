@@ -5,7 +5,7 @@ import { useUserCollections } from "../hooks/useUserCollections";
 import { addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
 import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
 
-const NIT_PATH_KEY = "nit_savedvariables_path";
+const NIT_PATHS_KEY = "nit_savedvariables_paths";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -18,25 +18,64 @@ function characterKey(name, realm) {
 function SettingsPage() {
   const { user, hasFirebaseConfig, signInWithGoogle, signOutUser } = useAuth();
   const { data } = useUserCollections(user?.uid);
-  const [nitPath, setNitPath] = useState("");
+  const [nitPathInput, setNitPathInput] = useState("");
+  const [nitPaths, setNitPaths] = useState([]);
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    const savedPath = localStorage.getItem(NIT_PATH_KEY);
-    if (savedPath) {
-      setNitPath(savedPath);
+    const savedRaw = localStorage.getItem(NIT_PATHS_KEY);
+    if (!savedRaw) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedRaw);
+      if (Array.isArray(parsed)) {
+        setNitPaths(parsed.filter(Boolean));
+        return;
+      }
+    } catch {
+      // Backward compatibility with old single-path storage.
+    }
+
+    if (savedRaw.trim()) {
+      setNitPaths([savedRaw.trim()]);
     }
   }, []);
 
-  const savePath = () => {
-    localStorage.setItem(NIT_PATH_KEY, nitPath.trim());
-    setSyncMessage("NovaInstanceTracker path saved.");
+  const savePaths = (paths) => {
+    setNitPaths(paths);
+    localStorage.setItem(NIT_PATHS_KEY, JSON.stringify(paths));
   };
 
-  const syncFromLuaText = async (luaText) => {
+  const addPath = () => {
+    const trimmed = nitPathInput.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const alreadyExists = nitPaths.some((path) => normalize(path) === normalize(trimmed));
+    if (alreadyExists) {
+      setSyncMessage("That path is already saved.");
+      return;
+    }
+
+    const next = [...nitPaths, trimmed];
+    savePaths(next);
+    setNitPathInput("");
+    setSyncMessage("NovaInstanceTracker path added.");
+  };
+
+  const removePath = (pathToRemove) => {
+    const next = nitPaths.filter((path) => path !== pathToRemove);
+    savePaths(next);
+    setSyncMessage("Path removed.");
+  };
+
+  const syncFromLuaTexts = async (luaTexts) => {
     if (!user) {
       return;
     }
@@ -45,14 +84,23 @@ function SettingsPage() {
     setSyncMessage("Sync in progress...");
 
     try {
-      const parsedCharacters = parseNovaCharacters(luaText);
-      const parsed = parseNovaSavedInstances(luaText);
+      const parsedCharacters = luaTexts.flatMap((text) => parseNovaCharacters(text));
+      const parsed = luaTexts.flatMap((text) => parseNovaSavedInstances(text));
+
+      const dedupedParsedCharacters = new Map();
+      parsedCharacters.forEach((entry) => {
+        const key = characterKey(entry.name, entry.realm);
+        if (!dedupedParsedCharacters.has(key)) {
+          dedupedParsedCharacters.set(key, entry);
+        }
+      });
+
       const charactersByKey = new Map(
         data.characters.map((character) => [characterKey(character.name, character.realm), character])
       );
       const createdCharacters = [];
 
-      for (const parsedCharacter of parsedCharacters) {
+      for (const parsedCharacter of dedupedParsedCharacters.values()) {
         const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
         if (!charactersByKey.has(key)) {
           const payload = {
@@ -87,6 +135,10 @@ function SettingsPage() {
 
       allCharacters.forEach((character) => {
         const key = `${normalize(character.name)}|${normalize(character.realm)}`;
+        if (!parsedByCharacter.has(key)) {
+          return;
+        }
+
         const entries = parsedByCharacter.get(key) || [];
         const lockedRaids = new Map(entries.map((item) => [item.raidName, item]));
 
@@ -122,13 +174,13 @@ function SettingsPage() {
   };
 
   const onFileSelected = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) {
       return;
     }
 
-    const text = await file.text();
-    await syncFromLuaText(text);
+    const texts = await Promise.all(files.map((file) => file.text()));
+    await syncFromLuaTexts(texts);
     event.target.value = "";
   };
 
@@ -157,25 +209,39 @@ function SettingsPage() {
           <div className="panel">
             <h3>NovaInstanceTracker Sync</h3>
             <p>
-              Save your Lua file path for reference, then click Update to import saved raid lockouts.
+              Save one or more Lua file paths for reference, then click Update to import saved raid
+              lockouts.
             </p>
             <input
-              value={nitPath}
-              onChange={(event) => setNitPath(event.target.value)}
+              value={nitPathInput}
+              onChange={(event) => setNitPathInput(event.target.value)}
               placeholder="d:/WoW/World of Warcraft/_classic_era_/WTF/Account/.../NovaInstanceTracker.lua"
             />
             <div className="row-actions">
-              <button type="button" onClick={savePath}>
-                Save Path
+              <button type="button" onClick={addPath}>
+                Add Path
               </button>
               <button type="button" onClick={onPickFile} disabled={isSyncing}>
                 {isSyncing ? "Updating..." : "Update from NovaInstanceTracker"}
               </button>
             </div>
+            {nitPaths.length ? (
+              <ul className="simple-list">
+                {nitPaths.map((path) => (
+                  <li key={path}>
+                    <span>{path}</span>
+                    <button type="button" className="danger" onClick={() => removePath(path)}>
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <input
               ref={fileInputRef}
               type="file"
               accept=".lua,text/plain"
+              multiple
               className="hidden-input"
               onChange={onFileSelected}
             />
