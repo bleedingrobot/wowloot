@@ -331,7 +331,9 @@ function SettingsPage() {
   };
 
   const onUpdateFromConnectedFiles = async () => {
-    const accountHintName = getUniqueAccountHint(nitPaths);
+    const accountHintName = getUniqueAccountHint(
+      [...nitPaths, nitPathInput.trim()].filter(Boolean)
+    );
     try {
       const handles = await loadConnectedHandles();
       if (!handles.length) {
@@ -369,7 +371,9 @@ function SettingsPage() {
       return;
     }
 
-    const accountHintName = getUniqueAccountHint(nitPaths);
+    const accountHintName = getUniqueAccountHint(
+      [...nitPaths, nitPathInput.trim()].filter(Boolean)
+    );
     const texts = await Promise.all(files.map((file) => file.text()));
     await syncFromLuaTexts(texts, accountHintName);
     event.target.value = "";
