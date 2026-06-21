@@ -36,6 +36,14 @@ function getUniqueAccountHint(paths) {
   return accounts.length === 1 ? accounts[0] : "";
 }
 
+function resolveAccountHint(paths, inputPath) {
+  const inputHint = extractAccountFromPath(inputPath);
+  if (inputHint) {
+    return inputHint;
+  }
+  return getUniqueAccountHint(paths);
+}
+
 function openHandleDb() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(NIT_HANDLE_DB, 1);
@@ -331,9 +339,7 @@ function SettingsPage() {
   };
 
   const onUpdateFromConnectedFiles = async () => {
-    const accountHintName = getUniqueAccountHint(
-      [...nitPaths, nitPathInput.trim()].filter(Boolean)
-    );
+    const accountHintName = resolveAccountHint(nitPaths, nitPathInput.trim());
     try {
       const handles = await loadConnectedHandles();
       if (!handles.length) {
@@ -371,9 +377,7 @@ function SettingsPage() {
       return;
     }
 
-    const accountHintName = getUniqueAccountHint(
-      [...nitPaths, nitPathInput.trim()].filter(Boolean)
-    );
+    const accountHintName = resolveAccountHint(nitPaths, nitPathInput.trim());
     const texts = await Promise.all(files.map((file) => file.text()));
     await syncFromLuaTexts(texts, accountHintName);
     event.target.value = "";
@@ -451,11 +455,16 @@ function SettingsPage() {
                 {isSyncing ? "Updating..." : "Update from NovaInstanceTracker"}
               </button>
             </div>
-            {connectedFileNames.length ? (
-              <p className="subtitle">Connected files: {connectedFileNames.join(", ")}</p>
-            ) : (
-              <p className="subtitle">No connected files yet. Click Connect Nova Files once.</p>
-            )}
+            <p className="subtitle">
+              Account hint: {resolveAccountHint(nitPaths, nitPathInput.trim()) || "Not detected"}
+            </p>
+            <ul className="simple-list">
+              {connectedFileNames.length ? (
+                connectedFileNames.map((fileName) => <li key={fileName}>{fileName}</li>)
+              ) : (
+                <li>No connected files yet. Click Connect Nova Files once.</li>
+              )}
+            </ul>
             {nitPaths.length ? (
               <ul className="simple-list">
                 {nitPaths.map((path) => (
