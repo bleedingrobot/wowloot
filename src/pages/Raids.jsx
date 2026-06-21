@@ -7,6 +7,7 @@ import { formatCountdown, isRaidLocked } from "../utils/raidReset";
 function RaidsPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
+  const visibleCharacters = data.characters.filter((character) => character.showOnDashboard !== false);
 
   if (!user) {
     return <p className="empty-panel">Sign in to view raid lockouts.</p>;
@@ -49,7 +50,7 @@ function RaidsPage() {
         Read-only view from connected NovaInstanceTracker files. Naxx, BWL, AQ40 reset Wednesday
         3:00 AM NZST / 5:00 AM NZDT. ZG, AQ20, and Ony reset every 3 days at 3:00 AM NZ time.
       </p>
-      {!data.characters.length ? (
+      {!visibleCharacters.length ? (
         <p>Add characters first.</p>
       ) : !data.raidStatuses.length ? (
         <p>No synced lockout data yet. Use Settings to connect files and sync.</p>
@@ -67,7 +68,7 @@ function RaidsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.characters.map((character) => (
+              {visibleCharacters.map((character) => (
                 <tr key={character.id}>
                   <td>{character.name}</td>
                   <td>{character.realm || "-"}</td>
