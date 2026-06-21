@@ -68,7 +68,6 @@ function DashboardPage() {
       return {
         character,
         metrics,
-        completion: metrics.totalLoot ? Math.round((metrics.obtained / metrics.totalLoot) * 100) : 0,
         raidSummary: raidNeedsSummary,
         lockedRaidSummary,
         raidItemsByRaid,
@@ -129,7 +128,6 @@ function DashboardPage() {
               savingKey={savingKey}
               onToggleRaidSaved={onToggleRaidSaved}
               classIcon={entry.classIcon}
-              completion={entry.completion}
             />
           ))}
         </div>

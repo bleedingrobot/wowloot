@@ -1,4 +1,3 @@
-import ProgressBar from "./ProgressBar";
 import { FALLBACK_ICON } from "../utils/classIcons";
 
 function CharacterCard({
@@ -8,7 +7,6 @@ function CharacterCard({
   lockedRaidSummary,
   raidItemsByRaid,
   classIcon,
-  completion,
   savingKey,
   onToggleRaidSaved
 }) {
@@ -69,11 +67,6 @@ function CharacterCard({
         ) : (
           <p className="raid-item-empty">No wishlist items in currently available raids.</p>
         )}
-      </section>
-
-      <section>
-        <p className="summary-title">Loot completion</p>
-        <ProgressBar value={completion} />
       </section>
     </article>
   );

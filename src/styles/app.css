@@ -124,7 +124,7 @@ p {
   border: 1px solid var(--edge);
   border-radius: 14px;
   background: var(--bg-panel);
-  padding: 1.1rem;
+  padding: 0.82rem;
   backdrop-filter: blur(4px);
   box-shadow: 0 14px 28px rgba(37, 99, 235, 0.08);
 }
@@ -146,26 +146,30 @@ p {
 .card-grid {
   margin-top: 1rem;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 0.72rem;
 }
 
 .card-header {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.8rem;
+  gap: 0.55rem;
   align-items: center;
 }
 
 .card-header p {
-  margin: 0.25rem 0 0;
-  font-size: 0.93rem;
+  margin: 0.15rem 0 0;
+  font-size: 0.87rem;
   color: var(--text-muted);
 }
 
+.character-card h3 {
+  font-size: 1rem;
+}
+
 .class-icon {
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   border-radius: 8px;
   border: 1px solid #b9d4ff;
   object-fit: cover;
@@ -183,27 +187,27 @@ p {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 0.3rem;
-  margin-top: 0.95rem;
+  margin-top: 0.55rem;
 }
 
 .card-stats p {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: 0.85rem;
 }
 
 .summary-title {
-  margin: 0.95rem 0 0.35rem;
-  font-size: 0.86rem;
+  margin: 0.5rem 0 0.18rem;
+  font-size: 0.78rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
 .raid-item-list {
-  margin: 0.5rem 0 0;
-  padding-left: 1.1rem;
+  margin: 0.28rem 0 0;
+  padding-left: 0.95rem;
   display: grid;
-  gap: 0.35rem;
+  gap: 0.2rem;
 }
 
 .raid-item-list li {
@@ -217,30 +221,15 @@ p {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
 
 .raid-item-empty {
-  margin: 0.45rem 0 0;
+  margin: 0.25rem 0 0;
   color: var(--text-muted);
-  font-size: 0.95rem;
-}
-
-.progress-track {
-  width: 100%;
-  height: 10px;
-  border-radius: 999px;
-  background: #edf3ff;
-  border: 1px solid #d2e2ff;
-}
-
-.progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #2563eb, #06b6d4);
-  transition: width 180ms ease;
+  font-size: 0.86rem;
 }
 
 .stack-form {
