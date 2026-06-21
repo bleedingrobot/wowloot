@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import CharacterCard from "../components/CharacterCard";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
@@ -6,10 +6,12 @@ import { useUserCollections } from "../hooks/useUserCollections";
 import { getNextRaidReset, formatCountdown, isRaidLocked } from "../utils/raidReset";
 import { calculateUrgency, sortCharactersByUrgency } from "../utils/urgency";
 import { getClassIcon } from "../utils/classIcons";
+import { upsertRaidStatus } from "../services/dataService";
 
 function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
+  const [savingKey, setSavingKey] = useState("");
 
   const nextReset = getNextRaidReset("Naxxramas");
 
@@ -40,14 +42,16 @@ function DashboardPage() {
           }
 
           return {
-            raidName: raid.short,
+            raidName: raid.name,
+            raidShort: raid.short,
+            locked: isRaidLocked(raidStatuses.find((status) => status.raidName === raid.name)),
             items: raidItems
           };
         })
         .filter(Boolean);
 
       const raidNeedsSummary = raidItemsByRaid.length
-        ? raidItemsByRaid.map((raidEntry) => raidEntry.raidName).join(", ")
+        ? raidItemsByRaid.map((raidEntry) => raidEntry.raidShort).join(", ")
         : "No raid needs";
 
       return {
@@ -75,6 +79,22 @@ function DashboardPage() {
     return <p className="empty-panel">Sign in on Settings to view your raid priority dashboard.</p>;
   }
 
+  const onToggleRaidSaved = async (characterId, raidName, checked) => {
+    const key = `${characterId}-${raidName}`;
+    setSavingKey(key);
+
+    const now = new Date();
+    await upsertRaidStatus(user.uid, {
+      characterId,
+      raidName,
+      completed: checked,
+      lastRunDate: checked ? now.toISOString() : null,
+      resetDate: checked ? getNextRaidReset(raidName, now).toISOString() : null
+    });
+
+    setSavingKey("");
+  };
+
   return (
     <section>
       <div className="panel-heading">
@@ -93,6 +113,8 @@ function DashboardPage() {
               metrics={entry.metrics}
               raidSummary={entry.raidSummary}
               raidItemsByRaid={entry.raidItemsByRaid}
+              savingKey={savingKey}
+              onToggleRaidSaved={onToggleRaidSaved}
               classIcon={entry.classIcon}
               completion={entry.completion}
             />

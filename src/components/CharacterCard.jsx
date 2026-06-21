@@ -1,7 +1,16 @@
 import ProgressBar from "./ProgressBar";
 import { FALLBACK_ICON } from "../utils/classIcons";
 
-function CharacterCard({ character, metrics, raidSummary, raidItemsByRaid, classIcon, completion }) {
+function CharacterCard({
+  character,
+  metrics,
+  raidSummary,
+  raidItemsByRaid,
+  classIcon,
+  completion,
+  savingKey,
+  onToggleRaidSaved
+}) {
 
   return (
     <article className="character-card">
@@ -34,7 +43,20 @@ function CharacterCard({ character, metrics, raidSummary, raidItemsByRaid, class
           <ul className="raid-item-list">
             {raidItemsByRaid.map((raidEntry) => (
               <li key={raidEntry.raidName}>
-                <strong>{raidEntry.raidName}:</strong> {raidEntry.items.join(", ")}
+                <div>
+                  <strong>{raidEntry.raidShort}:</strong> {raidEntry.items.join(", ")}
+                </div>
+                <label className="saved-toggle">
+                  <input
+                    type="checkbox"
+                    checked={raidEntry.locked}
+                    disabled={savingKey === `${character.id}-${raidEntry.raidName}`}
+                    onChange={(event) =>
+                      onToggleRaidSaved(character.id, raidEntry.raidName, event.target.checked)
+                    }
+                  />
+                  Saved
+                </label>
               </li>
             ))}
           </ul>
