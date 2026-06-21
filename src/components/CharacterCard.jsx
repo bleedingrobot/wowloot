@@ -6,9 +6,7 @@ function CharacterCard({
   raidSummary,
   lockedRaidSummary,
   raidItemsByRaid,
-  classIcon,
-  savingKey,
-  onToggleRaidSaved
+  classIcon
 }) {
 
   return (
@@ -50,17 +48,6 @@ function CharacterCard({
                 <div>
                   <strong>{raidEntry.raidShort}:</strong> {raidEntry.items.join(", ")}
                 </div>
-                <label className="saved-toggle">
-                  <input
-                    type="checkbox"
-                    checked={raidEntry.locked}
-                    disabled={savingKey === `${character.id}-${raidEntry.raidName}`}
-                    onChange={(event) =>
-                      onToggleRaidSaved(character.id, raidEntry.raidName, event.target.checked)
-                    }
-                  />
-                  Saved
-                </label>
               </li>
             ))}
           </ul>
