@@ -54,13 +54,34 @@ function DashboardPage() {
   const { data, loading } = useUserCollections(user?.uid);
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [classFilter, setClassFilter] = useState("all");
+  const [factionFilter, setFactionFilter] = useState("all");
+  const [realmFilter, setRealmFilter] = useState("all");
+  const [needFilter, setNeedFilter] = useState("needed");
   const fileInputRef = useRef(null);
 
   const nextReset = getNextRaidReset("Naxxramas");
 
-  const sorted = useMemo(() => {
-    const visibleCharacters = data.characters.filter((character) => character.showOnDashboard !== false);
+  const visibleCharacters = useMemo(
+    () => data.characters.filter((character) => character.showOnDashboard !== false),
+    [data.characters]
+  );
 
+  const classOptions = useMemo(
+    () => Array.from(new Set(visibleCharacters.map((character) => character.class).filter(Boolean))).sort(),
+    [visibleCharacters]
+  );
+  const factionOptions = useMemo(
+    () => Array.from(new Set(visibleCharacters.map((character) => character.faction).filter(Boolean))).sort(),
+    [visibleCharacters]
+  );
+  const realmOptions = useMemo(
+    () => Array.from(new Set(visibleCharacters.map((character) => character.realm).filter(Boolean))).sort(),
+    [visibleCharacters]
+  );
+
+  const filteredEntries = useMemo(() => {
     const entries = visibleCharacters.map((character) => {
       const lootItems = data.lootItems.filter((item) => item.characterId === character.id);
       const remainingLootItems = lootItems.filter((item) => !item.obtained);
@@ -118,9 +139,28 @@ function DashboardPage() {
       };
     });
 
-    const withNeededItems = entries.filter((entry) => entry.metrics.remaining > 0);
-    return sortCharactersByUrgency(withNeededItems);
-  }, [data.characters, data.lootItems, data.raidStatuses]);
+    const sortedEntries = sortCharactersByUrgency(entries);
+
+    return sortedEntries.filter((entry) => {
+      const needsMatch = needFilter === "all" || entry.metrics.remaining > 0;
+      const classMatch = classFilter === "all" || entry.character.class === classFilter;
+      const factionMatch = factionFilter === "all" || entry.character.faction === factionFilter;
+      const realmMatch = realmFilter === "all" || entry.character.realm === realmFilter;
+      const nameMatch =
+        !searchTerm.trim() || normalize(entry.character.name).includes(normalize(searchTerm));
+
+      return needsMatch && classMatch && factionMatch && realmMatch && nameMatch;
+    });
+  }, [
+    visibleCharacters,
+    data.lootItems,
+    data.raidStatuses,
+    needFilter,
+    classFilter,
+    factionFilter,
+    realmFilter,
+    searchTerm
+  ]);
 
   const syncFromLuaTexts = useCallback(async (luaTexts, { silent = false } = {}) => {
     if (!user) {
@@ -317,6 +357,14 @@ function DashboardPage() {
     return <p className="empty-panel">Sign in on Settings to view your raid priority dashboard.</p>;
   }
 
+  const resetFilters = () => {
+    setSearchTerm("");
+    setClassFilter("all");
+    setFactionFilter("all");
+    setRealmFilter("all");
+    setNeedFilter("needed");
+  };
+
   return (
     <section>
       <div className="panel-heading">
@@ -340,11 +388,50 @@ function DashboardPage() {
       />
       {syncMessage ? <p className="subtitle">{syncMessage}</p> : null}
 
-      {!sorted.length ? (
-        <p className="empty-panel">No characters with needed wishlist items right now.</p>
+      <div className="dashboard-filters">
+        <input
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder="Search character name"
+        />
+        <select value={needFilter} onChange={(event) => setNeedFilter(event.target.value)}>
+          <option value="needed">Needs items only</option>
+          <option value="all">Show all visible</option>
+        </select>
+        <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+          <option value="all">All classes</option>
+          {classOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <select value={factionFilter} onChange={(event) => setFactionFilter(event.target.value)}>
+          <option value="all">All factions</option>
+          {factionOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <select value={realmFilter} onChange={(event) => setRealmFilter(event.target.value)}>
+          <option value="all">All realms</option>
+          {realmOptions.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        <button type="button" onClick={resetFilters} className="secondary-btn">
+          Clear
+        </button>
+      </div>
+
+      {!filteredEntries.length ? (
+        <p className="empty-panel">No characters match the current dashboard filters.</p>
       ) : (
         <div className="card-grid">
-          {sorted.map((entry) => (
+          {filteredEntries.map((entry) => (
             <CharacterCard
               key={entry.character.id}
               character={entry.character}

@@ -291,6 +291,20 @@ button.danger {
   align-items: center;
 }
 
+.dashboard-filters {
+  margin-top: 0.7rem;
+  display: grid;
+  grid-template-columns: 1.2fr repeat(4, minmax(120px, 1fr)) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.secondary-btn {
+  border-color: #c7d8f6;
+  background: linear-gradient(180deg, #ffffff, #eef4ff);
+  color: var(--text-main);
+}
+
 .hidden-input {
   display: none;
 }
@@ -344,6 +358,10 @@ button.danger {
   }
 
   .card-stats {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-filters {
     grid-template-columns: 1fr;
   }
 }
