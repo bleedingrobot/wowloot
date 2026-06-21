@@ -29,6 +29,15 @@ function DashboardPage() {
         return !isRaidLocked(status);
       });
 
+      const lockedRaids = RAIDS.filter((raid) => {
+        const status = raidStatuses.find((s) => s.raidName === raid.name);
+        return isRaidLocked(status);
+      });
+
+      const lockedRaidSummary = lockedRaids.length
+        ? lockedRaids.map((raid) => raid.short).join(", ")
+        : "None";
+
       const raidSummary = availableRaids.length
         ? availableRaids.map((raid) => raid.short).join(", ")
         : "No raid needs";
@@ -61,6 +70,7 @@ function DashboardPage() {
         metrics,
         completion: metrics.totalLoot ? Math.round((metrics.obtained / metrics.totalLoot) * 100) : 0,
         raidSummary: raidNeedsSummary,
+        lockedRaidSummary,
         raidItemsByRaid,
         classIcon: getClassIcon(character.class)
       };
@@ -114,6 +124,7 @@ function DashboardPage() {
               character={entry.character}
               metrics={entry.metrics}
               raidSummary={entry.raidSummary}
+              lockedRaidSummary={entry.lockedRaidSummary}
               raidItemsByRaid={entry.raidItemsByRaid}
               savingKey={savingKey}
               onToggleRaidSaved={onToggleRaidSaved}

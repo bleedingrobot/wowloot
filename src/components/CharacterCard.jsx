@@ -5,6 +5,7 @@ function CharacterCard({
   character,
   metrics,
   raidSummary,
+  lockedRaidSummary,
   raidItemsByRaid,
   classIcon,
   completion,
@@ -34,6 +35,11 @@ function CharacterCard({
       <section className="card-stats">
         <p>Remaining wishlist: {metrics.remaining}</p>
         <p>Locked raids: {metrics.lockedOut}</p>
+      </section>
+
+      <section>
+        <p className="summary-title">Locked Raid List</p>
+        <p>{lockedRaidSummary}</p>
       </section>
 
       <section>
