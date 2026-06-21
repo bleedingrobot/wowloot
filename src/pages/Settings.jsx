@@ -83,6 +83,39 @@ async function loadConnectedHandles() {
   return handles;
 }
 
+async function hasSameEntry(handleA, handleB) {
+  if (typeof handleA?.isSameEntry !== "function") {
+    return false;
+  }
+
+  try {
+    return await handleA.isSameEntry(handleB);
+  } catch {
+    return false;
+  }
+}
+
+async function mergeConnectedHandles(existingHandles, newHandles) {
+  const merged = [...existingHandles];
+
+  for (const nextHandle of newHandles) {
+    let exists = false;
+
+    for (const currentHandle of merged) {
+      if (await hasSameEntry(currentHandle, nextHandle)) {
+        exists = true;
+        break;
+      }
+    }
+
+    if (!exists) {
+      merged.push(nextHandle);
+    }
+  }
+
+  return merged;
+}
+
 function SettingsPage() {
   const { user, hasFirebaseConfig, signInWithGoogle, signOutUser } = useAuth();
   const { data } = useUserCollections(user?.uid);
@@ -393,14 +426,7 @@ function SettingsPage() {
         ]
       });
 
-      const merged = [...existingHandles];
-      const seen = new Set(existingHandles.map((handle) => handle.name));
-      handles.forEach((handle) => {
-        if (!seen.has(handle.name)) {
-          merged.push(handle);
-          seen.add(handle.name);
-        }
-      });
+      const merged = await mergeConnectedHandles(existingHandles, handles);
 
       await saveConnectedHandles(merged);
       setConnectedFileNames(merged.map((handle) => handle.name));
@@ -551,7 +577,9 @@ function SettingsPage() {
             </p>
             <ul className="simple-list">
               {connectedFileNames.length ? (
-                connectedFileNames.map((fileName) => <li key={fileName}>{fileName}</li>)
+                connectedFileNames.map((fileName, index) => (
+                  <li key={`${fileName}-${index}`}>{fileName}</li>
+                ))
               ) : (
                 <li>No connected files yet. Click Connect Nova Files once.</li>
               )}
