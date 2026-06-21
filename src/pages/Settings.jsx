@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
-import { addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
+import { addAccount, addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
 import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
@@ -16,6 +16,18 @@ function normalize(value) {
 
 function characterKey(name, realm) {
   return `${normalize(name)}|${normalize(realm)}`;
+}
+
+function extractAccountFromPath(path) {
+  const match = String(path || "").match(/[\\/]Account[\\/]([^\\/]+)[\\/]SavedVariables/i);
+  return match?.[1] || "";
+}
+
+function getUniqueAccountHint(paths) {
+  const accounts = Array.from(
+    new Set(paths.map((path) => extractAccountFromPath(path)).filter(Boolean))
+  );
+  return accounts.length === 1 ? accounts[0] : "";
 }
 
 function openHandleDb() {
@@ -136,7 +148,7 @@ function SettingsPage() {
     setSyncMessage("Path removed.");
   };
 
-  const syncFromLuaTexts = async (luaTexts) => {
+  const syncFromLuaTexts = async (luaTexts, accountHintName = "") => {
     if (!user) {
       return;
     }
@@ -145,6 +157,18 @@ function SettingsPage() {
     setSyncMessage("Sync in progress...");
 
     try {
+      const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
+      let hintAccountId = "";
+      if (accountHintName) {
+        const normalized = normalize(accountHintName);
+        hintAccountId = accountMap.get(normalized) || "";
+        if (!hintAccountId) {
+          const created = await addAccount(user.uid, accountHintName);
+          hintAccountId = created.id;
+          accountMap.set(normalized, hintAccountId);
+        }
+      }
+
       const parsedCharacters = luaTexts.flatMap((text) => parseNovaCharacters(text));
       const parsed = luaTexts.flatMap((text) => parseNovaSavedInstances(text));
 
@@ -160,7 +184,7 @@ function SettingsPage() {
         data.characters.map((character) => [characterKey(character.name, character.realm), character])
       );
       const createdCharacters = [];
-      const defaultAccountId = data.accounts.length === 1 ? data.accounts[0].id : "";
+      const defaultAccountId = hintAccountId || (data.accounts.length === 1 ? data.accounts[0].id : "");
 
       for (const parsedCharacter of dedupedParsedCharacters.values()) {
         const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
@@ -179,6 +203,12 @@ function SettingsPage() {
           const createdCharacter = { id: created.id, ...payload };
           charactersByKey.set(key, createdCharacter);
           createdCharacters.push(createdCharacter);
+        } else if (defaultAccountId) {
+          const existing = charactersByKey.get(key);
+          if (existing && !existing.accountId) {
+            await updateCharacter(existing.id, { accountId: defaultAccountId });
+            existing.accountId = defaultAccountId;
+          }
         }
       }
 
@@ -263,6 +293,7 @@ function SettingsPage() {
   };
 
   const onUpdateFromConnectedFiles = async () => {
+    const accountHintName = getUniqueAccountHint(nitPaths);
     try {
       const handles = await loadConnectedHandles();
       if (!handles.length) {
@@ -287,7 +318,7 @@ function SettingsPage() {
         texts.push(await file.text());
       }
 
-      await syncFromLuaTexts(texts);
+      await syncFromLuaTexts(texts, accountHintName);
     } catch {
       setSyncMessage("Could not read connected files. Click Update again and pick files manually.");
       onPickFile();
@@ -300,8 +331,9 @@ function SettingsPage() {
       return;
     }
 
+    const accountHintName = getUniqueAccountHint(nitPaths);
     const texts = await Promise.all(files.map((file) => file.text()));
-    await syncFromLuaTexts(texts);
+    await syncFromLuaTexts(texts, accountHintName);
     event.target.value = "";
   };
 

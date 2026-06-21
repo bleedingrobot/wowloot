@@ -6,9 +6,10 @@ import { useUserCollections } from "../hooks/useUserCollections";
 import { getNextRaidReset, formatCountdown, isRaidLocked } from "../utils/raidReset";
 import { calculateUrgency, sortCharactersByUrgency } from "../utils/urgency";
 import { getClassIcon } from "../utils/classIcons";
-import { addCharacter, upsertRaidStatus } from "../services/dataService";
+import { addAccount, addCharacter, upsertRaidStatus } from "../services/dataService";
 import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
 
+const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_HANDLE_DB = "wowloot-nit-handles";
 const NIT_HANDLE_STORE = "handles";
 const NIT_HANDLE_KEY = "nova-files";
@@ -19,6 +20,29 @@ function normalize(value) {
 
 function characterKey(name, realm) {
   return `${normalize(name)}|${normalize(realm)}`;
+}
+
+function extractAccountFromPath(path) {
+  const match = String(path || "").match(/[\\/]Account[\\/]([^\\/]+)[\\/]SavedVariables/i);
+  return match?.[1] || "";
+}
+
+function getSavedPathAccountHint() {
+  const raw = localStorage.getItem(NIT_PATHS_KEY);
+  if (!raw) {
+    return "";
+  }
+
+  let paths = [];
+  try {
+    const parsed = JSON.parse(raw);
+    paths = Array.isArray(parsed) ? parsed : [raw];
+  } catch {
+    paths = [raw];
+  }
+
+  const accounts = Array.from(new Set(paths.map((path) => extractAccountFromPath(path)).filter(Boolean)));
+  return accounts.length === 1 ? accounts[0] : "";
 }
 
 function openHandleDb() {
@@ -219,6 +243,19 @@ function DashboardPage() {
     }
 
     try {
+      const accountHintName = getSavedPathAccountHint();
+      const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
+      let hintAccountId = "";
+      if (accountHintName) {
+        const normalized = normalize(accountHintName);
+        hintAccountId = accountMap.get(normalized) || "";
+        if (!hintAccountId) {
+          const created = await addAccount(user.uid, accountHintName);
+          hintAccountId = created.id;
+          accountMap.set(normalized, hintAccountId);
+        }
+      }
+
       const parsedCharacters = luaTexts.flatMap((text) => parseNovaCharacters(text));
       const parsed = luaTexts.flatMap((text) => parseNovaSavedInstances(text));
 
@@ -234,7 +271,7 @@ function DashboardPage() {
         data.characters.map((character) => [characterKey(character.name, character.realm), character])
       );
       const createdCharacters = [];
-      const defaultAccountId = data.accounts.length === 1 ? data.accounts[0].id : "";
+      const defaultAccountId = hintAccountId || (data.accounts.length === 1 ? data.accounts[0].id : "");
 
       for (const parsedCharacter of dedupedParsedCharacters.values()) {
         const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
