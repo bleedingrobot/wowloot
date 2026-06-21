@@ -9,6 +9,9 @@ const RAID_NAME_MAP = {
   "Onyxia's Lair": "Onyxia's Lair"
 };
 
+const ALLIANCE_RACES = new Set(["Human", "Dwarf", "NightElf", "Gnome"]);
+const HORDE_RACES = new Set(["Orc", "Undead", "Scourge", "Tauren", "Troll"]);
+
 function normalizeRaidName(name) {
   return RAID_NAME_MAP[name] || null;
 }
@@ -135,4 +138,104 @@ export function parseNovaSavedInstances(luaText) {
   });
 
   return results;
+}
+
+function inferFaction(raceEnglish) {
+  if (ALLIANCE_RACES.has(raceEnglish)) {
+    return "Alliance";
+  }
+  if (HORDE_RACES.has(raceEnglish)) {
+    return "Horde";
+  }
+  return "Unknown";
+}
+
+export function parseNovaCharacters(luaText) {
+  const lines = luaText.split(/\r?\n/);
+  const stack = [];
+  const results = [];
+
+  const pushContext = (ctx) => stack.push(ctx);
+
+  const popContext = () => {
+    const ctx = stack.pop();
+    if (ctx?.isChar && ctx.characterName && ctx.realm) {
+      results.push({
+        name: ctx.characterName,
+        realm: ctx.realm,
+        className: ctx.classLocalized || "Unknown",
+        faction: inferFaction(ctx.raceEnglish)
+      });
+    }
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    const keyedOpen = trimmed.match(/^\["([^"]+)"\]\s*=\s*\{$/);
+    if (keyedOpen) {
+      const key = keyedOpen[1];
+      const parent = stack[stack.length - 1];
+
+      const ctx = {
+        key,
+        isRealm: false,
+        isChar: false,
+        realm: null,
+        characterName: null,
+        classLocalized: null,
+        raceEnglish: null
+      };
+
+      if (parent?.key === "global") {
+        ctx.isRealm = true;
+        ctx.realm = key;
+      }
+
+      if (parent?.key === "myChars") {
+        const realmCtx = [...stack].reverse().find((entry) => entry.isRealm);
+        ctx.isChar = true;
+        ctx.characterName = key;
+        ctx.realm = realmCtx?.realm || null;
+      }
+
+      pushContext(ctx);
+      return;
+    }
+
+    if (trimmed === "{" || trimmed.endsWith("= {")) {
+      pushContext({ key: null });
+      return;
+    }
+
+    const current = stack[stack.length - 1];
+    if (current?.isChar) {
+      const classMatch = trimmed.match(/^\["classLocalized"\]\s*=\s*"([^"]+)",?$/);
+      if (classMatch) {
+        current.classLocalized = classMatch[1];
+      }
+
+      const raceMatch = trimmed.match(/^\["raceEnglish"\]\s*=\s*"([^"]+)",?$/);
+      if (raceMatch) {
+        current.raceEnglish = raceMatch[1];
+      }
+    }
+
+    const closes = (trimmed.match(/}/g) || []).length;
+    for (let index = 0; index < closes; index += 1) {
+      if (stack.length) {
+        popContext();
+      }
+    }
+  });
+
+  const deduped = new Map();
+  results.forEach((entry) => {
+    const key = `${entry.name.toLowerCase()}|${entry.realm.toLowerCase()}`;
+    if (!deduped.has(key)) {
+      deduped.set(key, entry);
+    }
+  });
+
+  return [...deduped.values()];
 }

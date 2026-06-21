@@ -2,13 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
-import { upsertRaidStatus } from "../services/dataService";
-import { parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import { addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
+import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
 
 const NIT_PATH_KEY = "nit_savedvariables_path";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function characterKey(name, realm) {
+  return `${normalize(name)}|${normalize(realm)}`;
 }
 
 function SettingsPage() {
@@ -17,6 +21,7 @@ function SettingsPage() {
   const [nitPath, setNitPath] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [savingVisibilityId, setSavingVisibilityId] = useState("");
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -40,7 +45,34 @@ function SettingsPage() {
     setSyncMessage("Sync in progress...");
 
     try {
+      const parsedCharacters = parseNovaCharacters(luaText);
       const parsed = parseNovaSavedInstances(luaText);
+      const charactersByKey = new Map(
+        data.characters.map((character) => [characterKey(character.name, character.realm), character])
+      );
+      const createdCharacters = [];
+
+      for (const parsedCharacter of parsedCharacters) {
+        const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
+        if (!charactersByKey.has(key)) {
+          const payload = {
+            name: parsedCharacter.name,
+            class: parsedCharacter.className || "Unknown",
+            faction: parsedCharacter.faction || "Unknown",
+            realm: parsedCharacter.realm,
+            accountId: "",
+            avatarUrl: "",
+            showOnDashboard: true,
+            importedFromNova: true
+          };
+          const created = await addCharacter(user.uid, payload);
+          const createdCharacter = { id: created.id, ...payload };
+          charactersByKey.set(key, createdCharacter);
+          createdCharacters.push(createdCharacter);
+        }
+      }
+
+      const allCharacters = [...data.characters, ...createdCharacters];
       const parsedByCharacter = new Map();
 
       parsed.forEach((entry) => {
@@ -53,7 +85,7 @@ function SettingsPage() {
 
       const updates = [];
 
-      data.characters.forEach((character) => {
+      allCharacters.forEach((character) => {
         const key = `${normalize(character.name)}|${normalize(character.realm)}`;
         const entries = parsedByCharacter.get(key) || [];
         const lockedRaids = new Map(entries.map((item) => [item.raidName, item]));
@@ -75,7 +107,9 @@ function SettingsPage() {
       await Promise.all(updates);
 
       const totalMatches = parsed.length;
-      setSyncMessage(`Sync complete. Imported ${totalMatches} saved raid entries from NovaInstanceTracker.`);
+      setSyncMessage(
+        `Sync complete. Imported ${totalMatches} saved raid entries and added ${createdCharacters.length} new characters.`
+      );
     } catch (error) {
       setSyncMessage("Sync failed. Ensure you selected a valid NovaInstanceTracker.lua file.");
     } finally {
@@ -96,6 +130,15 @@ function SettingsPage() {
     const text = await file.text();
     await syncFromLuaText(text);
     event.target.value = "";
+  };
+
+  const onToggleDashboardVisibility = async (characterId, checked) => {
+    setSavingVisibilityId(characterId);
+    try {
+      await updateCharacter(characterId, { showOnDashboard: checked });
+    } finally {
+      setSavingVisibilityId("");
+    }
   };
 
   return (
@@ -140,6 +183,31 @@ function SettingsPage() {
               Browser security blocks direct path reading on GitHub Pages, so Update uses a file picker.
             </p>
             {syncMessage ? <p>{syncMessage}</p> : null}
+          </div>
+
+          <div className="panel">
+            <h3>Dashboard Visibility</h3>
+            <p>Choose which characters appear on the dashboard.</p>
+            <ul className="simple-list">
+              {data.characters.map((character) => (
+                <li key={character.id}>
+                  <span>
+                    {character.name} - {character.realm}
+                  </span>
+                  <label className="saved-toggle">
+                    <input
+                      type="checkbox"
+                      checked={character.showOnDashboard !== false}
+                      disabled={savingVisibilityId === character.id}
+                      onChange={(event) =>
+                        onToggleDashboardVisibility(character.id, event.target.checked)
+                      }
+                    />
+                    Show
+                  </label>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <button type="button" onClick={signOutUser}>

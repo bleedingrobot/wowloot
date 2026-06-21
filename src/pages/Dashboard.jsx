@@ -16,7 +16,9 @@ function DashboardPage() {
   const nextReset = getNextRaidReset("Naxxramas");
 
   const sorted = useMemo(() => {
-    const entries = data.characters.map((character) => {
+    const visibleCharacters = data.characters.filter((character) => character.showOnDashboard !== false);
+
+    const entries = visibleCharacters.map((character) => {
       const lootItems = data.lootItems.filter((item) => item.characterId === character.id);
       const remainingLootItems = lootItems.filter((item) => !item.obtained);
       const raidStatuses = data.raidStatuses.filter((status) => status.characterId === character.id);
