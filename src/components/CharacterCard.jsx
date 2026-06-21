@@ -23,7 +23,6 @@ function CharacterCard({ character, metrics, raidSummary, raidItemsByRaid, class
       </header>
 
       <section className="card-stats">
-        <p>High priority: {metrics.counts.high}</p>
         <p>Remaining wishlist: {metrics.remaining}</p>
         <p>Locked raids: {metrics.lockedOut}</p>
       </section>

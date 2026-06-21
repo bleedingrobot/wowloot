@@ -27,7 +27,7 @@ function DashboardPage() {
 
       const raidSummary = availableRaids.length
         ? availableRaids.map((raid) => raid.short).join(", ")
-        : "All raids currently locked";
+        : "No raid needs";
 
       const raidItemsByRaid = availableRaids
         .map((raid) => {
@@ -46,11 +46,15 @@ function DashboardPage() {
         })
         .filter(Boolean);
 
+      const raidNeedsSummary = raidItemsByRaid.length
+        ? raidItemsByRaid.map((raidEntry) => raidEntry.raidName).join(", ")
+        : "No raid needs";
+
       return {
         character,
         metrics,
         completion: metrics.totalLoot ? Math.round((metrics.obtained / metrics.totalLoot) * 100) : 0,
-        raidSummary,
+        raidSummary: raidNeedsSummary,
         raidItemsByRaid,
         classIcon: getClassIcon(character.class)
       };
