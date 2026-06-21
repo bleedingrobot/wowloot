@@ -302,6 +302,10 @@ button.danger {
   align-items: center;
 }
 
+.hidden-input {
+  display: none;
+}
+
 .raid-table-wrapper {
   overflow-x: auto;
 }
