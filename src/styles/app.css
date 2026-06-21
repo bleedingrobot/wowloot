@@ -378,6 +378,40 @@ button.danger {
   gap: 0.3rem;
 }
 
+.raid-status-stack {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.raid-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid #cbdcfb;
+  padding: 0.16rem 0.55rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.raid-status-pill.open {
+  color: #065f46;
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.raid-status-pill.locked {
+  color: #991b1b;
+  border-color: #fca5a5;
+  background: #fff1f1;
+}
+
+.raid-reset-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
 .empty-panel {
   border: 1px dashed #b8cef8;
   border-radius: 12px;
