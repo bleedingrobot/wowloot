@@ -24,6 +24,24 @@ function RaidsPage() {
     );
   };
 
+  const sortedCharacters = [...visibleCharacters].sort((a, b) => {
+    const lockedCountA = RAIDS.reduce((count, raid) => {
+      const status = getStatus(a.id, raid.name);
+      return count + (isRaidLocked(status) ? 1 : 0);
+    }, 0);
+
+    const lockedCountB = RAIDS.reduce((count, raid) => {
+      const status = getStatus(b.id, raid.name);
+      return count + (isRaidLocked(status) ? 1 : 0);
+    }, 0);
+
+    if (lockedCountA !== lockedCountB) {
+      return lockedCountB - lockedCountA;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
+
   const renderStatus = (status) => {
     const locked = isRaidLocked(status);
     if (!locked) {
@@ -64,7 +82,7 @@ function RaidsPage() {
               </tr>
             </thead>
             <tbody>
-              {visibleCharacters.map((character) => (
+              {sortedCharacters.map((character) => (
                 <tr key={character.id}>
                   <td>{character.name}</td>
                   <td>{character.realm || "-"}</td>
