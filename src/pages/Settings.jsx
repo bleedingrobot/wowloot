@@ -6,6 +6,9 @@ import { addCharacter, updateCharacter, upsertRaidStatus } from "../services/dat
 import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
+const NIT_HANDLE_DB = "wowloot-nit-handles";
+const NIT_HANDLE_STORE = "handles";
+const NIT_HANDLE_KEY = "nova-files";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -13,6 +16,45 @@ function normalize(value) {
 
 function characterKey(name, realm) {
   return `${normalize(name)}|${normalize(realm)}`;
+}
+
+function openHandleDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(NIT_HANDLE_DB, 1);
+
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(NIT_HANDLE_STORE)) {
+        db.createObjectStore(NIT_HANDLE_STORE);
+      }
+    };
+
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function saveConnectedHandles(handles) {
+  const db = await openHandleDb();
+  await new Promise((resolve, reject) => {
+    const tx = db.transaction(NIT_HANDLE_STORE, "readwrite");
+    tx.objectStore(NIT_HANDLE_STORE).put(handles, NIT_HANDLE_KEY);
+    tx.oncomplete = resolve;
+    tx.onerror = () => reject(tx.error);
+  });
+  db.close();
+}
+
+async function loadConnectedHandles() {
+  const db = await openHandleDb();
+  const handles = await new Promise((resolve, reject) => {
+    const tx = db.transaction(NIT_HANDLE_STORE, "readonly");
+    const req = tx.objectStore(NIT_HANDLE_STORE).get(NIT_HANDLE_KEY);
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return handles;
 }
 
 function SettingsPage() {
@@ -23,6 +65,7 @@ function SettingsPage() {
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
+  const [connectedFileNames, setConnectedFileNames] = useState([]);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -44,6 +87,23 @@ function SettingsPage() {
     if (savedRaw.trim()) {
       setNitPaths([savedRaw.trim()]);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!window.indexedDB) {
+      return;
+    }
+
+    loadConnectedHandles()
+      .then((handles) => {
+        const names = handles
+          .map((handle) => handle?.name)
+          .filter(Boolean);
+        setConnectedFileNames(names);
+      })
+      .catch(() => {
+        setConnectedFileNames([]);
+      });
   }, []);
 
   const savePaths = (paths) => {
@@ -173,6 +233,65 @@ function SettingsPage() {
     fileInputRef.current?.click();
   };
 
+  const onConnectFiles = async () => {
+    if (!window.showOpenFilePicker) {
+      setSyncMessage("Your browser does not support direct file connections. Use Update and pick files.");
+      return;
+    }
+
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: true,
+        types: [
+          {
+            description: "Lua files",
+            accept: {
+              "text/plain": [".lua"]
+            }
+          }
+        ]
+      });
+
+      await saveConnectedHandles(handles);
+      setConnectedFileNames(handles.map((handle) => handle.name));
+      setSyncMessage(`Connected ${handles.length} Nova file(s). Update will now use these automatically.`);
+    } catch {
+      // User cancelled picker.
+    }
+  };
+
+  const onUpdateFromConnectedFiles = async () => {
+    try {
+      const handles = await loadConnectedHandles();
+      if (!handles.length) {
+        onPickFile();
+        return;
+      }
+
+      const texts = [];
+      for (const handle of handles) {
+        let permission = "granted";
+        if (handle.queryPermission) {
+          permission = await handle.queryPermission({ mode: "read" });
+        }
+        if (permission !== "granted" && handle.requestPermission) {
+          permission = await handle.requestPermission({ mode: "read" });
+        }
+        if (permission !== "granted") {
+          throw new Error("permission-denied");
+        }
+
+        const file = await handle.getFile();
+        texts.push(await file.text());
+      }
+
+      await syncFromLuaTexts(texts);
+    } catch {
+      setSyncMessage("Could not read connected files. Click Update again and pick files manually.");
+      onPickFile();
+    }
+  };
+
   const onFileSelected = async (event) => {
     const files = Array.from(event.target.files || []);
     if (!files.length) {
@@ -221,10 +340,18 @@ function SettingsPage() {
               <button type="button" onClick={addPath}>
                 Add Path
               </button>
-              <button type="button" onClick={onPickFile} disabled={isSyncing}>
+              <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
+                Connect Nova Files
+              </button>
+              <button type="button" onClick={onUpdateFromConnectedFiles} disabled={isSyncing}>
                 {isSyncing ? "Updating..." : "Update from NovaInstanceTracker"}
               </button>
             </div>
+            {connectedFileNames.length ? (
+              <p className="subtitle">Connected files: {connectedFileNames.join(", ")}</p>
+            ) : (
+              <p className="subtitle">No connected files yet. Click Connect Nova Files once.</p>
+            )}
             {nitPaths.length ? (
               <ul className="simple-list">
                 {nitPaths.map((path) => (
