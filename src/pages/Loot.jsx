@@ -8,6 +8,8 @@ function LootPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
   const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
+  const visibleCharacters = data.characters.filter((character) => character.showOnDashboard !== false);
+  const visibleCharacterIds = new Set(visibleCharacters.map((character) => character.id));
 
   const [form, setForm] = useState({
     characterId: "",
@@ -56,7 +58,7 @@ function LootPage() {
             onChange={(event) => setForm((prev) => ({ ...prev, characterId: event.target.value }))}
           >
             <option value="">Select character</option>
-            {data.characters.map((character) => (
+            {visibleCharacters.map((character) => (
               <option key={character.id} value={character.id}>
                 {formatCharacterLabel(character)}
               </option>
@@ -102,7 +104,9 @@ function LootPage() {
       <article className="panel">
         <h2>Loot Wishlist</h2>
         <ul className="loot-list">
-          {data.lootItems.map((item) => {
+          {data.lootItems
+            .filter((item) => visibleCharacterIds.has(item.characterId))
+            .map((item) => {
             const owner = data.characters.find((character) => character.id === item.characterId);
             return (
               <li key={item.id}>
