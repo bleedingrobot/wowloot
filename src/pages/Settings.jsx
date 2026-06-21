@@ -39,14 +39,6 @@ function getUniqueAccountHint(paths) {
   return accounts.length === 1 ? accounts[0] : "";
 }
 
-function resolveAccountHint(paths, inputPath) {
-  const inputHint = extractAccountFromPath(inputPath);
-  if (inputHint) {
-    return inputHint;
-  }
-  return getUniqueAccountHint(paths);
-}
-
 function openHandleDb() {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(NIT_HANDLE_DB, 1);
@@ -143,7 +135,6 @@ function SettingsPage() {
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
-  const [isAssigningAccount, setIsAssigningAccount] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
@@ -234,55 +225,6 @@ function SettingsPage() {
   const savePaths = (paths) => {
     setNitPaths(paths);
     localStorage.setItem(NIT_PATHS_KEY, JSON.stringify(paths));
-  };
-
-  const ensureAccountIdFromHint = async (accountHintName) => {
-    if (!accountHintName) {
-      return "";
-    }
-
-    const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
-    const normalized = normalize(accountHintName);
-    const existingId = accountMap.get(normalized);
-    if (existingId) {
-      return existingId;
-    }
-
-    const created = await addAccount(user.uid, accountHintName);
-    return created.id;
-  };
-
-  const assignUnassignedCharacters = async (accountId) => {
-    const targets = data.characters.filter((character) => !character.accountId);
-    await Promise.all(targets.map((character) => updateCharacter(character.id, { accountId })));
-    return targets.length;
-  };
-
-  const onAssignUnassignedToDetectedAccount = async () => {
-    if (!user || isAssigningAccount) {
-      return;
-    }
-
-    const hintName = getUniqueAccountHint(nitPaths);
-    if (!hintName) {
-      setSyncMessage("No account hint detected from saved paths yet.");
-      return;
-    }
-
-    setIsAssigningAccount(true);
-    try {
-      const accountId = await ensureAccountIdFromHint(hintName);
-      const assignedCount = await assignUnassignedCharacters(accountId);
-      if (assignedCount) {
-        setSyncMessage(`Assigned ${assignedCount} unassigned character(s) to ${hintName}.`);
-      } else {
-        setSyncMessage(`No unassigned characters found. ${hintName} is already applied.`);
-      }
-    } catch {
-      setSyncMessage("Could not assign unassigned characters right now.");
-    } finally {
-      setIsAssigningAccount(false);
-    }
   };
 
   const syncFromLuaTexts = async (sources) => {
@@ -622,14 +564,6 @@ function SettingsPage() {
               5 minutes.
             </p>
             <div className="row-actions">
-              <button
-                type="button"
-                className="secondary-btn"
-                onClick={onAssignUnassignedToDetectedAccount}
-                disabled={isAssigningAccount}
-              >
-                {isAssigningAccount ? "Assigning..." : "Assign Unassigned to Detected Account"}
-              </button>
               <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
                 Connect Nova
               </button>
