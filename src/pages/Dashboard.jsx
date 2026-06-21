@@ -54,11 +54,15 @@ function DashboardPage() {
   const { data, loading } = useUserCollections(user?.uid);
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatus, setSyncStatus] = useState("idle");
+  const [lastSyncAt, setLastSyncAt] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [factionFilter, setFactionFilter] = useState("all");
   const [realmFilter, setRealmFilter] = useState("all");
+  const [accountFilter, setAccountFilter] = useState("all");
   const [needFilter, setNeedFilter] = useState("needed");
+  const [availabilityFilter, setAvailabilityFilter] = useState("any");
   const fileInputRef = useRef(null);
 
   const nextReset = getNextRaidReset("Naxxramas");
@@ -80,6 +84,28 @@ function DashboardPage() {
     () => Array.from(new Set(visibleCharacters.map((character) => character.realm).filter(Boolean))).sort(),
     [visibleCharacters]
   );
+  const accountNameById = useMemo(
+    () => new Map(data.accounts.map((account) => [account.id, account.battleNetId])),
+    [data.accounts]
+  );
+  const accountOptions = useMemo(() => {
+    const map = new Map();
+
+    visibleCharacters.forEach((character) => {
+      const value = character.accountId || "unassigned";
+      const label = character.accountId
+        ? accountNameById.get(character.accountId) || "Unknown account"
+        : "Unassigned";
+
+      if (!map.has(value)) {
+        map.set(value, label);
+      }
+    });
+
+    return [...map.entries()]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [visibleCharacters, accountNameById]);
 
   const filteredEntries = useMemo(() => {
     const entries = visibleCharacters.map((character) => {
@@ -143,22 +169,41 @@ function DashboardPage() {
 
     return sortedEntries.filter((entry) => {
       const needsMatch = needFilter === "all" || entry.metrics.remaining > 0;
+      let availabilityMatch = true;
+      if (availabilityFilter === "locked") {
+        availabilityMatch = entry.metrics.lockedOut > 0;
+      }
+      if (availabilityFilter === "reset-ready") {
+        availabilityMatch = entry.raidItemsByRaid.length > 0;
+      }
       const classMatch = classFilter === "all" || entry.character.class === classFilter;
       const factionMatch = factionFilter === "all" || entry.character.faction === factionFilter;
       const realmMatch = realmFilter === "all" || entry.character.realm === realmFilter;
+      const accountValue = entry.character.accountId || "unassigned";
+      const accountMatch = accountFilter === "all" || accountValue === accountFilter;
       const nameMatch =
         !searchTerm.trim() || normalize(entry.character.name).includes(normalize(searchTerm));
 
-      return needsMatch && classMatch && factionMatch && realmMatch && nameMatch;
+      return (
+        needsMatch
+        && availabilityMatch
+        && classMatch
+        && factionMatch
+        && realmMatch
+        && accountMatch
+        && nameMatch
+      );
     });
   }, [
     visibleCharacters,
     data.lootItems,
     data.raidStatuses,
     needFilter,
+    availabilityFilter,
     classFilter,
     factionFilter,
     realmFilter,
+    accountFilter,
     searchTerm
   ]);
 
@@ -168,6 +213,7 @@ function DashboardPage() {
     }
 
     setIsSyncing(true);
+    setSyncStatus("syncing");
     if (!silent) {
       setSyncMessage("Sync in progress...");
     }
@@ -188,6 +234,7 @@ function DashboardPage() {
         data.characters.map((character) => [characterKey(character.name, character.realm), character])
       );
       const createdCharacters = [];
+      const defaultAccountId = data.accounts.length === 1 ? data.accounts[0].id : "";
 
       for (const parsedCharacter of dedupedParsedCharacters.values()) {
         const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
@@ -197,7 +244,7 @@ function DashboardPage() {
             class: parsedCharacter.className || "Unknown",
             faction: parsedCharacter.faction || "Unknown",
             realm: parsedCharacter.realm,
-            accountId: "",
+            accountId: parsedCharacter.accountId || defaultAccountId,
             avatarUrl: "",
             showOnDashboard: true,
             importedFromNova: true
@@ -248,6 +295,8 @@ function DashboardPage() {
       await Promise.all(updates);
 
       const stamp = new Date().toLocaleTimeString();
+      setLastSyncAt(new Date());
+      setSyncStatus("success");
       if (silent) {
         setSyncMessage(`Auto-sync complete at ${stamp}.`);
       } else {
@@ -256,13 +305,14 @@ function DashboardPage() {
         );
       }
     } catch {
+      setSyncStatus("error");
       if (!silent) {
         setSyncMessage("Sync failed. Ensure you selected valid NovaInstanceTracker.lua files.");
       }
     } finally {
       setIsSyncing(false);
     }
-  }, [data.characters, user]);
+  }, [data.accounts, data.characters, user]);
 
   const onPickFile = useCallback(() => {
     fileInputRef.current?.click();
@@ -281,6 +331,7 @@ function DashboardPage() {
 
   const onSyncFromConnectedFiles = useCallback(async (silent = false) => {
     if (!window.indexedDB) {
+      setSyncStatus("warn");
       if (!silent) {
         setSyncMessage("Browser does not support connected file sync. Use manual file picker sync.");
       }
@@ -290,6 +341,9 @@ function DashboardPage() {
     try {
       const handles = await loadConnectedHandles();
       if (!handles.length) {
+        if (silent) {
+          setSyncStatus("warn");
+        }
         if (!silent) {
           onPickFile();
         }
@@ -315,6 +369,7 @@ function DashboardPage() {
 
         if (permission !== "granted") {
           if (!silent) {
+            setSyncStatus("warn");
             setSyncMessage("Permission denied for one or more connected files.");
           }
           return;
@@ -326,6 +381,7 @@ function DashboardPage() {
 
       await syncFromLuaTexts(texts, { silent });
     } catch {
+      setSyncStatus("warn");
       if (!silent) {
         setSyncMessage("Could not read connected files. Use manual file picker sync.");
         onPickFile();
@@ -362,8 +418,21 @@ function DashboardPage() {
     setClassFilter("all");
     setFactionFilter("all");
     setRealmFilter("all");
+    setAccountFilter("all");
     setNeedFilter("needed");
+    setAvailabilityFilter("any");
   };
+
+  const syncLabel =
+    syncStatus === "syncing"
+      ? "Syncing"
+      : syncStatus === "success"
+        ? "Healthy"
+        : syncStatus === "error"
+          ? "Error"
+          : syncStatus === "warn"
+            ? "Attention"
+            : "Idle";
 
   return (
     <section>
@@ -373,6 +442,9 @@ function DashboardPage() {
           <p>Weekly reset in {formatCountdown(nextReset)}</p>
         </div>
         <div className="row-actions">
+          <span className={`sync-pill ${syncStatus}`}>
+            Sync: {syncLabel} | Last: {lastSyncAt ? lastSyncAt.toLocaleTimeString() : "Never"}
+          </span>
           <button type="button" onClick={() => onSyncFromConnectedFiles()} disabled={isSyncing}>
             {isSyncing ? "Syncing..." : "Sync from Nova"}
           </button>
@@ -398,6 +470,14 @@ function DashboardPage() {
           <option value="needed">Needs items only</option>
           <option value="all">Show all visible</option>
         </select>
+        <select
+          value={availabilityFilter}
+          onChange={(event) => setAvailabilityFilter(event.target.value)}
+        >
+          <option value="any">All availability</option>
+          <option value="locked">Locked out only</option>
+          <option value="reset-ready">Reset-ready only</option>
+        </select>
         <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
           <option value="all">All classes</option>
           {classOptions.map((option) => (
@@ -419,6 +499,14 @@ function DashboardPage() {
           {realmOptions.map((option) => (
             <option key={option} value={option}>
               {option}
+            </option>
+          ))}
+        </select>
+        <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+          <option value="all">All accounts</option>
+          {accountOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>

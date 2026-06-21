@@ -67,6 +67,7 @@ function SettingsPage() {
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
   const [connectedFileNames, setConnectedFileNames] = useState([]);
   const fileInputRef = useRef(null);
+  const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
 
   useEffect(() => {
     const savedRaw = localStorage.getItem(NIT_PATHS_KEY);
@@ -159,6 +160,7 @@ function SettingsPage() {
         data.characters.map((character) => [characterKey(character.name, character.realm), character])
       );
       const createdCharacters = [];
+      const defaultAccountId = data.accounts.length === 1 ? data.accounts[0].id : "";
 
       for (const parsedCharacter of dedupedParsedCharacters.values()) {
         const key = characterKey(parsedCharacter.name, parsedCharacter.realm);
@@ -168,7 +170,7 @@ function SettingsPage() {
             class: parsedCharacter.className || "Unknown",
             faction: parsedCharacter.faction || "Unknown",
             realm: parsedCharacter.realm,
-            accountId: "",
+            accountId: parsedCharacter.accountId || defaultAccountId,
             avatarUrl: "",
             showOnDashboard: true,
             importedFromNova: true
@@ -385,7 +387,9 @@ function SettingsPage() {
               {data.characters.map((character) => (
                 <li key={character.id}>
                   <span>
-                    {character.name} - {character.realm}
+                    {character.name} - {character.realm} - {character.accountId
+                      ? accountNameById.get(character.accountId) || "Unknown account"
+                      : "Unassigned"}
                   </span>
                   <label className="saved-toggle">
                     <input
