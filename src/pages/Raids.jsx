@@ -46,10 +46,6 @@ function RaidsPage() {
   return (
     <section className="panel">
       <h2>Raid Lockout Tracking</h2>
-      <p className="subtitle">
-        Read-only view from connected NovaInstanceTracker files. Naxx, BWL, AQ40 reset Wednesday
-        3:00 AM NZST / 5:00 AM NZDT. ZG, AQ20, and Ony reset every 3 days at 3:00 AM NZ time.
-      </p>
       {!visibleCharacters.length ? (
         <p>Add characters first.</p>
       ) : !data.raidStatuses.length ? (
