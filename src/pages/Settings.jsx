@@ -382,13 +382,6 @@ function SettingsPage() {
     }
 
     try {
-      const accountHintInput = window.prompt("Account name for these files (example: JAMESRILEY)", "");
-      if (accountHintInput === null) {
-        return;
-      }
-      const accountHintName = accountHintInput.trim();
-      const existingHandles = await loadConnectedHandles();
-      const existingMeta = readConnectedFileMeta();
       const handles = await window.showOpenFilePicker({
         multiple: true,
         types: [
@@ -400,6 +393,14 @@ function SettingsPage() {
           }
         ]
       });
+
+      const accountHintInput = window.prompt("Account name for these files (example: JAMESRILEY)", "");
+      if (accountHintInput === null) {
+        return;
+      }
+      const accountHintName = accountHintInput.trim();
+      const existingHandles = await loadConnectedHandles();
+      const existingMeta = readConnectedFileMeta();
 
       const merged = await mergeConnectedHandles(existingHandles, handles);
       const addedCount = merged.length - existingHandles.length;
