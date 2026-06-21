@@ -3,7 +3,7 @@ import CharacterCard from "../components/CharacterCard";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
-import { getNextWeeklyReset, formatCountdown } from "../utils/raidReset";
+import { getNextRaidReset, formatCountdown, isRaidLocked } from "../utils/raidReset";
 import { calculateUrgency, sortCharactersByUrgency } from "../utils/urgency";
 import { getClassIcon } from "../utils/classIcons";
 
@@ -11,7 +11,7 @@ function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
 
-  const nextReset = getNextWeeklyReset();
+  const nextReset = getNextRaidReset("Naxxramas");
 
   const sorted = useMemo(() => {
     const entries = data.characters.map((character) => {
@@ -20,15 +20,9 @@ function DashboardPage() {
       const raidStatuses = data.raidStatuses.filter((status) => status.characterId === character.id);
       const metrics = calculateUrgency(lootItems, raidStatuses);
 
-      const availableRaids = RAIDS.filter((raid) => {
+      const availableRaids = RAIDS.filter((raid) => { 
         const status = raidStatuses.find((s) => s.raidName === raid.name);
-        if (!status) {
-          return true;
-        }
-        if (!status.completed) {
-          return true;
-        }
-        return status.resetDate ? new Date(status.resetDate) <= new Date() : true;
+        return !isRaidLocked(status);
       });
 
       const raidSummary = availableRaids.length

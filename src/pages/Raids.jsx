@@ -1,14 +1,43 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
 import { upsertRaidStatus } from "../services/dataService";
-import { getNextWeeklyReset } from "../utils/raidReset";
+import { getNextRaidReset, isRaidLocked } from "../utils/raidReset";
 
 function RaidsPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
   const [savingKey, setSavingKey] = useState("");
+
+  useEffect(() => {
+    if (!user || !data.raidStatuses.length) {
+      return;
+    }
+
+    const now = new Date();
+    const expired = data.raidStatuses.filter(
+      (status) => status.completed && status.resetDate && new Date(status.resetDate) <= now
+    );
+
+    if (!expired.length) {
+      return;
+    }
+
+    Promise.all(
+      expired.map((status) =>
+        upsertRaidStatus(user.uid, {
+          characterId: status.characterId,
+          raidName: status.raidName,
+          completed: false,
+          lastRunDate: null,
+          resetDate: null
+        })
+      )
+    ).catch(() => {
+      // Keep UI responsive even if one cleanup update fails.
+    });
+  }, [user, data.raidStatuses]);
 
   if (!user) {
     return <p className="empty-panel">Sign in to manage raid lockouts.</p>;
@@ -30,7 +59,7 @@ function RaidsPage() {
       raidName,
       completed: checked,
       lastRunDate: checked ? now.toISOString() : null,
-      resetDate: checked ? getNextWeeklyReset(now).toISOString() : null
+      resetDate: checked ? getNextRaidReset(raidName, now).toISOString() : null
     });
 
     setSavingKey("");
@@ -39,6 +68,10 @@ function RaidsPage() {
   return (
     <section className="panel">
       <h2>Raid Lockout Tracking</h2>
+      <p className="subtitle">
+        Naxx, BWL, AQ40 reset Wednesday 3:00 AM NZST / 5:00 AM NZDT. ZG, AQ20, and Ony reset
+        every 3 days at 3:00 AM NZ time.
+      </p>
       {!data.characters.length ? (
         <p>Add characters first.</p>
       ) : (
@@ -59,20 +92,21 @@ function RaidsPage() {
                   {RAIDS.map((raid) => {
                     const status = getStatus(character.id, raid.name);
                     const isBusy = savingKey === `${character.id}-${raid.name}`;
+                    const locked = isRaidLocked(status);
 
                     return (
                       <td key={raid.name}>
                         <label className="checkbox-label">
                           <input
                             type="checkbox"
-                            checked={Boolean(status?.completed)}
+                            checked={locked}
                             disabled={isBusy}
                             onChange={(event) =>
                               onToggleRaid(character.id, raid.name, event.target.checked)
                             }
                           />
                           <span>
-                            {status?.resetDate
+                            {locked && status?.resetDate
                               ? new Date(status.resetDate).toLocaleDateString()
                               : "Open"}
                           </span>

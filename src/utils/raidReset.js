@@ -1,20 +1,142 @@
-const WEEKLY_RESET_DAY_UTC = 2;
-const RESET_HOUR_UTC = 15;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const WEEKLY_RAIDS = new Set(["Naxxramas", "Blackwing Lair", "Ahn'Qiraj 40"]);
+const THREE_DAY_RAIDS = new Set(["Zul'Gurub", "Ruins of Ahn'Qiraj", "Onyxia's Lair"]);
+const THREE_DAY_ANCHOR_LOCAL_DAY_NUMBER = Math.floor(Date.UTC(2024, 0, 3) / DAY_MS);
 
-export function getNextWeeklyReset(fromDate = new Date()) {
-  const date = new Date(fromDate);
-  const reset = new Date(date);
-  reset.setUTCHours(RESET_HOUR_UTC, 0, 0, 0);
+function getNZOffsetHours(date) {
+  const timeZoneName = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Pacific/Auckland",
+    timeZoneName: "shortOffset"
+  })
+    .formatToParts(date)
+    .find((part) => part.type === "timeZoneName")?.value;
 
-  const currentDay = reset.getUTCDay();
-  let diff = WEEKLY_RESET_DAY_UTC - currentDay;
-
-  if (diff < 0 || (diff === 0 && date >= reset)) {
-    diff += 7;
+  const match = timeZoneName?.match(/GMT([+-]\d{1,2})(?::?(\d{2}))?/);
+  if (!match) {
+    return 12;
   }
 
-  reset.setUTCDate(reset.getUTCDate() + diff);
-  return reset;
+  const hours = Number(match[1]);
+  const mins = Number(match[2] || "0");
+  return hours + mins / 60;
+}
+
+function localDayNumberToYmd(localDayNumber) {
+  const date = new Date(localDayNumber * DAY_MS);
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+    weekday: date.getUTCDay()
+  };
+}
+
+function getNZLocalDateParts(date) {
+  const formatted = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Pacific/Auckland",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  })
+    .formatToParts(date)
+    .reduce((acc, part) => {
+      if (part.type !== "literal") {
+        acc[part.type] = part.value;
+      }
+      return acc;
+    }, {});
+
+  const year = Number(formatted.year);
+  const month = Number(formatted.month);
+  const day = Number(formatted.day);
+
+  return {
+    year,
+    month,
+    day,
+    hour: Number(formatted.hour),
+    minute: Number(formatted.minute),
+    second: Number(formatted.second),
+    dayNumber: Math.floor(Date.UTC(year, month - 1, day) / DAY_MS)
+  };
+}
+
+function nzLocalToUtc(year, month, day, hour) {
+  const initialGuess = new Date(Date.UTC(year, month - 1, day, hour - 12, 0, 0));
+  const offsetHours = getNZOffsetHours(initialGuess);
+  return new Date(Date.UTC(year, month - 1, day, hour - offsetHours, 0, 0));
+}
+
+function getNextWeeklyReset(fromDate = new Date()) {
+  const now = new Date(fromDate);
+  const localNow = getNZLocalDateParts(now);
+
+  for (let step = 0; step <= 10; step += 1) {
+    const current = localDayNumberToYmd(localNow.dayNumber + step);
+    if (current.weekday !== 3) {
+      continue;
+    }
+
+    const nzNoon = nzLocalToUtc(current.year, current.month, current.day, 12);
+    const currentOffset = getNZOffsetHours(nzNoon);
+    const targetHour = currentOffset >= 13 ? 5 : 3;
+    const candidate = nzLocalToUtc(current.year, current.month, current.day, targetHour);
+
+    if (candidate > now) {
+      return candidate;
+    }
+  }
+
+  return new Date(now.getTime() + 7 * DAY_MS);
+}
+
+function getNextThreeDayReset(fromDate = new Date()) {
+  const now = new Date(fromDate);
+  const localNow = getNZLocalDateParts(now);
+
+  for (let step = 0; step <= 10; step += 1) {
+    const dayNumber = localNow.dayNumber + step;
+    if ((dayNumber - THREE_DAY_ANCHOR_LOCAL_DAY_NUMBER) % 3 !== 0) {
+      continue;
+    }
+
+    const current = localDayNumberToYmd(dayNumber);
+    const candidate = nzLocalToUtc(current.year, current.month, current.day, 3);
+
+    if (candidate > now) {
+      return candidate;
+    }
+  }
+
+  return new Date(now.getTime() + 3 * DAY_MS);
+}
+
+export function getNextRaidReset(raidName, fromDate = new Date()) {
+  if (THREE_DAY_RAIDS.has(raidName)) {
+    return getNextThreeDayReset(fromDate);
+  }
+
+  if (WEEKLY_RAIDS.has(raidName)) {
+    return getNextWeeklyReset(fromDate);
+  }
+
+  return getNextWeeklyReset(fromDate);
+}
+
+export function isRaidLocked(status, now = new Date()) {
+  if (!status?.completed) {
+    return false;
+  }
+
+  if (!status.resetDate) {
+    return true;
+  }
+
+  return new Date(status.resetDate) > now;
 }
 
 export function formatCountdown(targetDate) {
