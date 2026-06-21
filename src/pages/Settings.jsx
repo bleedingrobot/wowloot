@@ -139,6 +139,8 @@ function SettingsPage() {
   const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
   const [connectedFiles, setConnectedFiles] = useState([]);
+  const [pendingConnectHandles, setPendingConnectHandles] = useState([]);
+  const [pendingAccountName, setPendingAccountName] = useState("");
   const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
 
   const readSelectedFileIndexes = () => {
@@ -394,15 +396,34 @@ function SettingsPage() {
         ]
       });
 
-      const accountHintInput = window.prompt("Account name for these files (example: JAMESRILEY)", "");
-      if (accountHintInput === null) {
+      if (!handles.length) {
         return;
       }
-      const accountHintName = accountHintInput.trim();
+
+      setPendingConnectHandles(handles);
+      setPendingAccountName(getUniqueAccountHint(nitPaths));
+      setSyncMessage("Set account name for selected files, then confirm.");
+    } catch {
+      // User cancelled picker.
+    }
+  };
+
+  const onCancelPendingConnect = () => {
+    setPendingConnectHandles([]);
+    setPendingAccountName("");
+  };
+
+  const onConfirmPendingConnect = async () => {
+    if (!pendingConnectHandles.length) {
+      return;
+    }
+
+    try {
+      const accountHintName = pendingAccountName.trim();
       const existingHandles = await loadConnectedHandles();
       const existingMeta = readConnectedFileMeta();
 
-      const merged = await mergeConnectedHandles(existingHandles, handles);
+      const merged = await mergeConnectedHandles(existingHandles, pendingConnectHandles);
       const addedCount = merged.length - existingHandles.length;
       const nextMeta = [...existingMeta];
       for (let index = 0; index < addedCount; index += 1) {
@@ -422,10 +443,12 @@ function SettingsPage() {
       );
       saveSelectedFileIndexes(merged.map((_, index) => index));
       setSyncMessage(
-        `Added ${handles.length} file selection(s). ${merged.length} Nova file(s) now connected.`
+        `Added ${pendingConnectHandles.length} file selection(s). ${merged.length} Nova file(s) now connected.`
       );
+      setPendingConnectHandles([]);
+      setPendingAccountName("");
     } catch {
-      // User cancelled picker.
+      setSyncMessage("Could not connect selected files. Try again.");
     }
   };
 
@@ -610,6 +633,28 @@ function SettingsPage() {
               )}
             </ul>
             {syncMessage ? <p>{syncMessage}</p> : null}
+
+            {pendingConnectHandles.length ? (
+              <div className="panel">
+                <h4>Set Account For New Files</h4>
+                <p className="subtitle">
+                  {pendingConnectHandles.length} selected file(s) awaiting confirmation.
+                </p>
+                <input
+                  value={pendingAccountName}
+                  onChange={(event) => setPendingAccountName(event.target.value)}
+                  placeholder="Account name (example: JAMESRILEY)"
+                />
+                <div className="row-actions">
+                  <button type="button" onClick={onConfirmPendingConnect}>
+                    Confirm Connection
+                  </button>
+                  <button type="button" className="secondary-btn" onClick={onCancelPendingConnect}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <div className="panel">
