@@ -380,6 +380,7 @@ function SettingsPage() {
     }
 
     try {
+      const existingHandles = await loadConnectedHandles();
       const handles = await window.showOpenFilePicker({
         multiple: true,
         types: [
@@ -392,9 +393,20 @@ function SettingsPage() {
         ]
       });
 
-      await saveConnectedHandles(handles);
-      setConnectedFileNames(handles.map((handle) => handle.name));
-      setSyncMessage(`Connected ${handles.length} Nova file(s). Update will now use these automatically.`);
+      const merged = [...existingHandles];
+      const seen = new Set(existingHandles.map((handle) => handle.name));
+      handles.forEach((handle) => {
+        if (!seen.has(handle.name)) {
+          merged.push(handle);
+          seen.add(handle.name);
+        }
+      });
+
+      await saveConnectedHandles(merged);
+      setConnectedFileNames(merged.map((handle) => handle.name));
+      setSyncMessage(
+        `Added ${handles.length} file selection(s). ${merged.length} Nova file(s) now connected.`
+      );
     } catch {
       // User cancelled picker.
     }
