@@ -91,6 +91,7 @@ function SettingsPage() {
   const [pathMessage, setPathMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isAssigningAccount, setIsAssigningAccount] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
@@ -141,7 +142,56 @@ function SettingsPage() {
     localStorage.setItem(NIT_PATHS_KEY, JSON.stringify(paths));
   };
 
-  const addPath = () => {
+  const ensureAccountIdFromHint = async (accountHintName) => {
+    if (!accountHintName) {
+      return "";
+    }
+
+    const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
+    const normalized = normalize(accountHintName);
+    const existingId = accountMap.get(normalized);
+    if (existingId) {
+      return existingId;
+    }
+
+    const created = await addAccount(user.uid, accountHintName);
+    return created.id;
+  };
+
+  const assignUnassignedCharacters = async (accountId) => {
+    const targets = data.characters.filter((character) => !character.accountId);
+    await Promise.all(targets.map((character) => updateCharacter(character.id, { accountId })));
+    return targets.length;
+  };
+
+  const onAssignUnassignedToDetectedAccount = async () => {
+    if (!user || isAssigningAccount) {
+      return;
+    }
+
+    const hintName = resolveAccountHint(nitPaths, nitPathInput.trim());
+    if (!hintName) {
+      setPathMessage("No account hint detected. Add or paste a full path containing /Account/<name>/.");
+      return;
+    }
+
+    setIsAssigningAccount(true);
+    try {
+      const accountId = await ensureAccountIdFromHint(hintName);
+      const assignedCount = await assignUnassignedCharacters(accountId);
+      if (assignedCount) {
+        setPathMessage(`Assigned ${assignedCount} unassigned character(s) to ${hintName}.`);
+      } else {
+        setPathMessage(`No unassigned characters found. ${hintName} is already applied.`);
+      }
+    } catch {
+      setPathMessage("Could not assign unassigned characters right now.");
+    } finally {
+      setIsAssigningAccount(false);
+    }
+  };
+
+  const addPath = async () => {
     const trimmed = nitPathInput.trim();
     if (!trimmed) {
       return;
@@ -159,8 +209,15 @@ function SettingsPage() {
     setNitPathInput("");
     const hintedAccount = getUniqueAccountHint(next);
     if (hintedAccount) {
-      setSyncMessage(`Path added. Account hint detected: ${hintedAccount}.`);
-      setPathMessage(`Saved path added. Detected account: ${hintedAccount}.`);
+      try {
+        const accountId = await ensureAccountIdFromHint(hintedAccount);
+        const assignedCount = await assignUnassignedCharacters(accountId);
+        setSyncMessage(`Path added. Account hint detected: ${hintedAccount}.`);
+        setPathMessage(`Saved path added. Assigned ${assignedCount} unassigned character(s) to ${hintedAccount}.`);
+      } catch {
+        setSyncMessage(`Path added. Account hint detected: ${hintedAccount}.`);
+        setPathMessage(`Saved path added. Detected account: ${hintedAccount}.`);
+      }
     } else {
       setSyncMessage("Path added. Connect files to allow direct updates.");
       setPathMessage("Saved path added.");
@@ -458,6 +515,14 @@ function SettingsPage() {
             <div className="row-actions">
               <button type="button" onClick={addPath} disabled={!nitPathInput.trim()}>
                 Add Path
+              </button>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={onAssignUnassignedToDetectedAccount}
+                disabled={isAssigningAccount}
+              >
+                {isAssigningAccount ? "Assigning..." : "Assign Unassigned to Detected Account"}
               </button>
               <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
                 Connect Nova Files
