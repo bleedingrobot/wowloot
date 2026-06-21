@@ -88,6 +88,7 @@ function SettingsPage() {
   const { data } = useUserCollections(user?.uid);
   const [nitPathInput, setNitPathInput] = useState("");
   const [nitPaths, setNitPaths] = useState([]);
+  const [pathMessage, setPathMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
@@ -149,6 +150,7 @@ function SettingsPage() {
     const alreadyExists = nitPaths.some((path) => normalize(path) === normalize(trimmed));
     if (alreadyExists) {
       setSyncMessage("That path is already saved.");
+      setPathMessage("That path is already in your saved list.");
       return;
     }
 
@@ -158,8 +160,10 @@ function SettingsPage() {
     const hintedAccount = getUniqueAccountHint(next);
     if (hintedAccount) {
       setSyncMessage(`Path added. Account hint detected: ${hintedAccount}.`);
+      setPathMessage(`Saved path added. Detected account: ${hintedAccount}.`);
     } else {
       setSyncMessage("Path added. Connect files to allow direct updates.");
+      setPathMessage("Saved path added.");
     }
   };
 
@@ -167,6 +171,7 @@ function SettingsPage() {
     const next = nitPaths.filter((path) => path !== pathToRemove);
     savePaths(next);
     setSyncMessage("Path removed.");
+    setPathMessage("Saved path removed.");
   };
 
   const syncFromLuaTexts = async (luaTexts, accountHintName = "") => {
@@ -442,10 +447,16 @@ function SettingsPage() {
             <input
               value={nitPathInput}
               onChange={(event) => setNitPathInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  addPath();
+                }
+              }}
               placeholder="d:/WoW/World of Warcraft/_classic_era_/WTF/Account/.../NovaInstanceTracker.lua"
             />
             <div className="row-actions">
-              <button type="button" onClick={addPath}>
+              <button type="button" onClick={addPath} disabled={!nitPathInput.trim()}>
                 Add Path
               </button>
               <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
@@ -458,6 +469,9 @@ function SettingsPage() {
             <p className="subtitle">
               Account hint: {resolveAccountHint(nitPaths, nitPathInput.trim()) || "Not detected"}
             </p>
+            <p className="subtitle">
+              {pathMessage || `${nitPaths.length} saved path reference${nitPaths.length === 1 ? "" : "s"}.`}
+            </p>
             <ul className="simple-list">
               {connectedFileNames.length ? (
                 connectedFileNames.map((fileName) => <li key={fileName}>{fileName}</li>)
@@ -465,6 +479,7 @@ function SettingsPage() {
                 <li>No connected files yet. Click Connect Nova Files once.</li>
               )}
             </ul>
+            <h4>Saved Path References</h4>
             {nitPaths.length ? (
               <ul className="simple-list">
                 {nitPaths.map((path) => (
