@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
@@ -15,6 +15,8 @@ const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_HANDLE_DB = "wowloot-nit-handles";
 const NIT_HANDLE_STORE = "handles";
 const NIT_HANDLE_KEY = "nova-files";
+const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
+const NIT_AUTO_SYNC_ENABLED_KEY = "nit_auto_sync_enabled";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -119,18 +121,33 @@ async function mergeConnectedHandles(existingHandles, newHandles) {
 function SettingsPage() {
   const { user, hasFirebaseConfig, signInWithGoogle, signOutUser } = useAuth();
   const { data } = useUserCollections(user?.uid);
-  const [nitPathInput, setNitPathInput] = useState("");
   const [nitPaths, setNitPaths] = useState([]);
-  const [pathMessage, setPathMessage] = useState("");
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [isAssigningAccount, setIsAssigningAccount] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
-  const [connectedFileNames, setConnectedFileNames] = useState([]);
-  const fileInputRef = useRef(null);
+  const [connectedFiles, setConnectedFiles] = useState([]);
   const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
+
+  const readSelectedFileIndexes = () => {
+    try {
+      const raw = localStorage.getItem(NIT_SELECTED_FILE_INDEXES_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((value) => Number.isInteger(value) && value >= 0) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveSelectedFileIndexes = (indexes) => {
+    localStorage.setItem(NIT_SELECTED_FILE_INDEXES_KEY, JSON.stringify(indexes));
+  };
 
   useEffect(() => {
     const savedRaw = localStorage.getItem(NIT_PATHS_KEY);
@@ -153,22 +170,46 @@ function SettingsPage() {
     }
   }, []);
 
-  useEffect(() => {
+  const hydrateConnectedFiles = useCallback(() => {
     if (!window.indexedDB) {
       return;
     }
 
     loadConnectedHandles()
       .then((handles) => {
-        const names = handles
-          .map((handle) => handle?.name)
-          .filter(Boolean);
-        setConnectedFileNames(names);
+        const selectedIndexes = readSelectedFileIndexes();
+        const selectedSet = new Set(selectedIndexes);
+        const hasSelection = selectedSet.size > 0;
+
+        setConnectedFiles(
+          handles.map((handle, index) => ({
+            id: `${handle?.name || "file"}-${index}`,
+            name: handle?.name || "Unknown file",
+            selected: hasSelection ? selectedSet.has(index) : true,
+            handle
+          }))
+        );
       })
       .catch(() => {
-        setConnectedFileNames([]);
+        setConnectedFiles([]);
       });
   }, []);
+
+  useEffect(() => {
+    hydrateConnectedFiles();
+  }, [hydrateConnectedFiles]);
+
+  useEffect(() => {
+    const raw = localStorage.getItem(NIT_AUTO_SYNC_ENABLED_KEY);
+    if (raw === null) {
+      return;
+    }
+    setAutoSyncEnabled(raw !== "false");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(NIT_AUTO_SYNC_ENABLED_KEY, autoSyncEnabled ? "true" : "false");
+  }, [autoSyncEnabled]);
 
   const savePaths = (paths) => {
     setNitPaths(paths);
@@ -202,9 +243,9 @@ function SettingsPage() {
       return;
     }
 
-    const hintName = resolveAccountHint(nitPaths, nitPathInput.trim());
+    const hintName = getUniqueAccountHint(nitPaths);
     if (!hintName) {
-      setPathMessage("No account hint detected. Add or paste a full path containing /Account/<name>/.");
+      setSyncMessage("No account hint detected from saved paths yet.");
       return;
     }
 
@@ -213,55 +254,15 @@ function SettingsPage() {
       const accountId = await ensureAccountIdFromHint(hintName);
       const assignedCount = await assignUnassignedCharacters(accountId);
       if (assignedCount) {
-        setPathMessage(`Assigned ${assignedCount} unassigned character(s) to ${hintName}.`);
+        setSyncMessage(`Assigned ${assignedCount} unassigned character(s) to ${hintName}.`);
       } else {
-        setPathMessage(`No unassigned characters found. ${hintName} is already applied.`);
+        setSyncMessage(`No unassigned characters found. ${hintName} is already applied.`);
       }
     } catch {
-      setPathMessage("Could not assign unassigned characters right now.");
+      setSyncMessage("Could not assign unassigned characters right now.");
     } finally {
       setIsAssigningAccount(false);
     }
-  };
-
-  const addPath = async () => {
-    const trimmed = nitPathInput.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    const alreadyExists = nitPaths.some((path) => normalize(path) === normalize(trimmed));
-    if (alreadyExists) {
-      setSyncMessage("That path is already saved.");
-      setPathMessage("That path is already in your saved list.");
-      return;
-    }
-
-    const next = [...nitPaths, trimmed];
-    savePaths(next);
-    setNitPathInput("");
-    const hintedAccount = getUniqueAccountHint(next);
-    if (hintedAccount) {
-      try {
-        const accountId = await ensureAccountIdFromHint(hintedAccount);
-        const assignedCount = await assignUnassignedCharacters(accountId);
-        setSyncMessage(`Path added. Account hint detected: ${hintedAccount}.`);
-        setPathMessage(`Saved path added. Assigned ${assignedCount} unassigned character(s) to ${hintedAccount}.`);
-      } catch {
-        setSyncMessage(`Path added. Account hint detected: ${hintedAccount}.`);
-        setPathMessage(`Saved path added. Detected account: ${hintedAccount}.`);
-      }
-    } else {
-      setSyncMessage("Path added. Connect files to allow direct updates.");
-      setPathMessage("Saved path added.");
-    }
-  };
-
-  const removePath = (pathToRemove) => {
-    const next = nitPaths.filter((path) => path !== pathToRemove);
-    savePaths(next);
-    setSyncMessage("Path removed.");
-    setPathMessage("Saved path removed.");
   };
 
   const syncFromLuaTexts = async (luaTexts, accountHintName = "") => {
@@ -402,10 +403,6 @@ function SettingsPage() {
     }
   };
 
-  const onPickFile = () => {
-    fileInputRef.current?.click();
-  };
-
   const onConnectFiles = async () => {
     if (!window.showOpenFilePicker) {
       setSyncMessage("Your browser does not support direct file connections. Use Update and pick files.");
@@ -429,7 +426,15 @@ function SettingsPage() {
       const merged = await mergeConnectedHandles(existingHandles, handles);
 
       await saveConnectedHandles(merged);
-      setConnectedFileNames(merged.map((handle) => handle.name));
+      setConnectedFiles(
+        merged.map((handle, index) => ({
+          id: `${handle?.name || "file"}-${index}`,
+          name: handle?.name || "Unknown file",
+          selected: true,
+          handle
+        }))
+      );
+      saveSelectedFileIndexes(merged.map((_, index) => index));
       setSyncMessage(
         `Added ${handles.length} file selection(s). ${merged.length} Nova file(s) now connected.`
       );
@@ -438,17 +443,22 @@ function SettingsPage() {
     }
   };
 
-  const onUpdateFromConnectedFiles = async () => {
-    const accountHintName = resolveAccountHint(nitPaths, nitPathInput.trim());
+  const onUpdateFromConnectedFiles = async (silent = false) => {
+    const accountHintName = getUniqueAccountHint(nitPaths);
     try {
-      const handles = await loadConnectedHandles();
-      if (!handles.length) {
-        onPickFile();
+      const selectedHandles = connectedFiles
+        .filter((item) => item.selected)
+        .map((item) => item.handle);
+
+      if (!selectedHandles.length) {
+        if (!silent) {
+          setSyncMessage("Select at least one connected Nova file to sync.");
+        }
         return;
       }
 
       const texts = [];
-      for (const handle of handles) {
+      for (const handle of selectedHandles) {
         let permission = "granted";
         if (handle.queryPermission) {
           permission = await handle.queryPermission({ mode: "read" });
@@ -466,22 +476,45 @@ function SettingsPage() {
 
       await syncFromLuaTexts(texts, accountHintName);
     } catch {
-      setSyncMessage("Could not read connected files. Click Update again and pick files manually.");
-      onPickFile();
+      if (!silent) {
+        setSyncMessage("Could not read selected connected files. Reconnect files and try again.");
+      }
     }
   };
 
-  const onFileSelected = async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) {
+  const onToggleConnectedFile = (id, checked) => {
+    setConnectedFiles((prev) => {
+      const next = prev.map((item) => (item.id === id ? { ...item, selected: checked } : item));
+      const selectedIndexes = next
+        .map((item, index) => (item.selected ? index : -1))
+        .filter((value) => value >= 0);
+      saveSelectedFileIndexes(selectedIndexes);
+      return next;
+    });
+  };
+
+  const onRemoveConnectedFile = async (id) => {
+    const next = connectedFiles.filter((item) => item.id !== id);
+    setConnectedFiles(next);
+    await saveConnectedHandles(next.map((item) => item.handle));
+    const selectedIndexes = next
+      .map((item, index) => (item.selected ? index : -1))
+      .filter((value) => value >= 0);
+    saveSelectedFileIndexes(selectedIndexes);
+    setSyncMessage(`Connected file removed. ${next.length} remaining.`);
+  };
+
+  useEffect(() => {
+    if (!user || !autoSyncEnabled) {
       return;
     }
 
-    const accountHintName = resolveAccountHint(nitPaths, nitPathInput.trim());
-    const texts = await Promise.all(files.map((file) => file.text()));
-    await syncFromLuaTexts(texts, accountHintName);
-    event.target.value = "";
-  };
+    const intervalId = window.setInterval(() => {
+      onUpdateFromConnectedFiles(true);
+    }, 5 * 60 * 1000);
+
+    return () => window.clearInterval(intervalId);
+  }, [autoSyncEnabled, connectedFiles, user]);
 
   const onToggleDashboardVisibility = async (characterId, checked) => {
     setSavingVisibilityId(characterId);
@@ -511,7 +544,8 @@ function SettingsPage() {
       localStorage.removeItem(NIT_PATHS_KEY);
       await saveConnectedHandles([]);
       setNitPaths([]);
-      setConnectedFileNames([]);
+      setConnectedFiles([]);
+      saveSelectedFileIndexes([]);
       setSyncMessage("All data deleted.");
     } catch {
       setSyncMessage("Delete failed. Please try again.");
@@ -533,27 +567,13 @@ function SettingsPage() {
             Signed in as <strong>{user.email}</strong>
           </p>
 
-          <div className="panel">
+          <div className="panel sync-panel">
             <h3>NovaInstanceTracker Sync</h3>
             <p>
-              Add Path stores a reference and account hint only. Browsers cannot read local files
-              by path on hosted sites, so click Connect Nova Files once for one-click updates.
+              Connect Nova files once, then choose which connected files to sync now or auto-sync every
+              5 minutes.
             </p>
-            <input
-              value={nitPathInput}
-              onChange={(event) => setNitPathInput(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  addPath();
-                }
-              }}
-              placeholder="d:/WoW/World of Warcraft/_classic_era_/WTF/Account/.../NovaInstanceTracker.lua"
-            />
             <div className="row-actions">
-              <button type="button" onClick={addPath} disabled={!nitPathInput.trim()}>
-                Add Path
-              </button>
               <button
                 type="button"
                 className="secondary-btn"
@@ -563,51 +583,49 @@ function SettingsPage() {
                 {isAssigningAccount ? "Assigning..." : "Assign Unassigned to Detected Account"}
               </button>
               <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
-                Connect Nova Files
+                Connect Nova
               </button>
               <button type="button" onClick={onUpdateFromConnectedFiles} disabled={isSyncing}>
-                {isSyncing ? "Updating..." : "Update from NovaInstanceTracker"}
+                {isSyncing ? "Syncing..." : "Sync Selected"}
               </button>
             </div>
             <p className="subtitle">
-              Account hint: {resolveAccountHint(nitPaths, nitPathInput.trim()) || "Not detected"}
+              Auto-sync every 5 minutes
+              <label className="saved-toggle" style={{ marginLeft: "0.55rem" }}>
+                <input
+                  type="checkbox"
+                  checked={autoSyncEnabled}
+                  onChange={(event) => setAutoSyncEnabled(event.target.checked)}
+                />
+                Enabled
+              </label>
             </p>
-            <p className="subtitle">
-              {pathMessage || `${nitPaths.length} saved path reference${nitPaths.length === 1 ? "" : "s"}.`}
-            </p>
+            <h4>Connected Files</h4>
             <ul className="simple-list">
-              {connectedFileNames.length ? (
-                connectedFileNames.map((fileName, index) => (
-                  <li key={`${fileName}-${index}`}>{fileName}</li>
-                ))
-              ) : (
-                <li>No connected files yet. Click Connect Nova Files once.</li>
-              )}
-            </ul>
-            <h4>Saved Path References</h4>
-            {nitPaths.length ? (
-              <ul className="simple-list">
-                {nitPaths.map((path) => (
-                  <li key={path}>
-                    <span>{path}</span>
-                    <button type="button" className="danger" onClick={() => removePath(path)}>
+              {connectedFiles.length ? (
+                connectedFiles.map((item) => (
+                  <li key={item.id}>
+                    <label className="saved-toggle">
+                      <input
+                        type="checkbox"
+                        checked={item.selected}
+                        onChange={(event) => onToggleConnectedFile(item.id, event.target.checked)}
+                      />
+                      {item.name}
+                    </label>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => onRemoveConnectedFile(item.id)}
+                    >
                       Remove
                     </button>
                   </li>
-                ))}
-              </ul>
-            ) : null}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".lua,text/plain"
-              multiple
-              className="hidden-input"
-              onChange={onFileSelected}
-            />
-            <p className="subtitle">
-              Browser security blocks direct path reading on GitHub Pages, so Update uses a file picker.
-            </p>
+                ))
+              ) : (
+                <li>No connected files yet. Click Connect Nova once.</li>
+              )}
+            </ul>
             {syncMessage ? <p>{syncMessage}</p> : null}
           </div>
 

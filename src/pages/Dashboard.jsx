@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import CharacterCard from "../components/CharacterCard";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
@@ -13,6 +13,8 @@ const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_HANDLE_DB = "wowloot-nit-handles";
 const NIT_HANDLE_STORE = "handles";
 const NIT_HANDLE_KEY = "nova-files";
+const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
+const NIT_AUTO_SYNC_ENABLED_KEY = "nit_auto_sync_enabled";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -43,6 +45,24 @@ function getSavedPathAccountHint() {
 
   const accounts = Array.from(new Set(paths.map((path) => extractAccountFromPath(path)).filter(Boolean)));
   return accounts.length === 1 ? accounts[0] : "";
+}
+
+function getSelectedConnectedFileIndexes() {
+  try {
+    const raw = localStorage.getItem(NIT_SELECTED_FILE_INDEXES_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value) => Number.isInteger(value) && value >= 0) : [];
+  } catch {
+    return [];
+  }
+}
+
+function isAutoSyncEnabled() {
+  const raw = localStorage.getItem(NIT_AUTO_SYNC_ENABLED_KEY);
+  return raw !== "false";
 }
 
 function openHandleDb() {
@@ -87,7 +107,6 @@ function DashboardPage() {
   const [accountFilter, setAccountFilter] = useState("all");
   const [needFilter, setNeedFilter] = useState("needed");
   const [availabilityFilter, setAvailabilityFilter] = useState("any");
-  const fileInputRef = useRef(null);
 
   const nextReset = getNextRaidReset("Naxxramas");
 
@@ -352,21 +371,6 @@ function DashboardPage() {
     }
   }, [data.accounts, data.characters, user]);
 
-  const onPickFile = useCallback(() => {
-    fileInputRef.current?.click();
-  }, []);
-
-  const onFileSelected = useCallback(async (event) => {
-    const files = Array.from(event.target.files || []);
-    if (!files.length) {
-      return;
-    }
-
-    const texts = await Promise.all(files.map((file) => file.text()));
-    await syncFromLuaTexts(texts);
-    event.target.value = "";
-  }, [syncFromLuaTexts]);
-
   const onSyncFromConnectedFiles = useCallback(async (silent = false) => {
     if (!window.indexedDB) {
       setSyncStatus("warn");
@@ -383,13 +387,26 @@ function DashboardPage() {
           setSyncStatus("warn");
         }
         if (!silent) {
-          onPickFile();
+          setSyncMessage("No connected Nova files yet. Connect files in Settings.");
+        }
+        return;
+      }
+
+      const selectedIndexes = getSelectedConnectedFileIndexes();
+      const selectedHandles = selectedIndexes.length
+        ? selectedIndexes.map((index) => handles[index]).filter(Boolean)
+        : handles;
+
+      if (!selectedHandles.length) {
+        if (!silent) {
+          setSyncStatus("warn");
+          setSyncMessage("No files selected for sync. Select files in Settings.");
         }
         return;
       }
 
       const texts = [];
-      for (const handle of handles) {
+      for (const handle of selectedHandles) {
         let permission = "granted";
         if (handle.queryPermission) {
           permission = await handle.queryPermission({ mode: "read" });
@@ -421,14 +438,13 @@ function DashboardPage() {
     } catch {
       setSyncStatus("warn");
       if (!silent) {
-        setSyncMessage("Could not read connected files. Use manual file picker sync.");
-        onPickFile();
+        setSyncMessage("Could not read selected connected files. Reconnect files in Settings.");
       }
     }
-  }, [onPickFile, syncFromLuaTexts]);
+  }, [syncFromLuaTexts]);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !isAutoSyncEnabled()) {
       return;
     }
 
@@ -488,14 +504,6 @@ function DashboardPage() {
           </button>
         </div>
       </div>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".lua,text/plain"
-        multiple
-        className="hidden-input"
-        onChange={onFileSelected}
-      />
       {syncMessage ? <p className="subtitle">{syncMessage}</p> : null}
 
       <div className="dashboard-filters">
