@@ -118,7 +118,8 @@ function DashboardPage() {
       };
     });
 
-    return sortCharactersByUrgency(entries);
+    const withNeededItems = entries.filter((entry) => entry.metrics.remaining > 0);
+    return sortCharactersByUrgency(withNeededItems);
   }, [data.characters, data.lootItems, data.raidStatuses]);
 
   const syncFromLuaTexts = useCallback(async (luaTexts, { silent = false } = {}) => {
@@ -340,7 +341,7 @@ function DashboardPage() {
       {syncMessage ? <p className="subtitle">{syncMessage}</p> : null}
 
       {!sorted.length ? (
-        <p className="empty-panel">No characters yet. Add one in Characters.</p>
+        <p className="empty-panel">No characters with needed wishlist items right now.</p>
       ) : (
         <div className="card-grid">
           {sorted.map((entry) => (
