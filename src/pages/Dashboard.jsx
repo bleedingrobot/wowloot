@@ -282,6 +282,7 @@ function DashboardPage() {
             faction: parsedCharacter.faction || "Unknown",
             realm: parsedCharacter.realm,
             accountId: parsedCharacter.accountId || defaultAccountId,
+            level: typeof parsedCharacter.level === "number" ? parsedCharacter.level : null,
             avatarUrl: "",
             showOnDashboard: true,
             importedFromNova: true

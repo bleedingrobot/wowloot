@@ -83,6 +83,7 @@ function SettingsPage() {
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
+  const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
   const [connectedFileNames, setConnectedFileNames] = useState([]);
   const fileInputRef = useRef(null);
@@ -202,6 +203,7 @@ function SettingsPage() {
             faction: parsedCharacter.faction || "Unknown",
             realm: parsedCharacter.realm,
             accountId: parsedCharacter.accountId || defaultAccountId,
+            level: typeof parsedCharacter.level === "number" ? parsedCharacter.level : null,
             avatarUrl: "",
             showOnDashboard: true,
             importedFromNova: true
@@ -212,9 +214,33 @@ function SettingsPage() {
           createdCharacters.push(createdCharacter);
         } else if (defaultAccountId) {
           const existing = charactersByKey.get(key);
-          if (existing && !existing.accountId) {
-            await updateCharacter(existing.id, { accountId: defaultAccountId });
-            existing.accountId = defaultAccountId;
+          if (existing) {
+            const updates = {};
+            if (!existing.accountId) {
+              updates.accountId = defaultAccountId;
+              existing.accountId = defaultAccountId;
+            }
+            if (
+              typeof parsedCharacter.level === "number"
+              && existing.level !== parsedCharacter.level
+            ) {
+              updates.level = parsedCharacter.level;
+              existing.level = parsedCharacter.level;
+            }
+
+            if (Object.keys(updates).length) {
+              await updateCharacter(existing.id, updates);
+            }
+          }
+        } else {
+          const existing = charactersByKey.get(key);
+          if (
+            existing
+            && typeof parsedCharacter.level === "number"
+            && existing.level !== parsedCharacter.level
+          ) {
+            await updateCharacter(existing.id, { level: parsedCharacter.level });
+            existing.level = parsedCharacter.level;
           }
         }
       }
@@ -450,13 +476,23 @@ function SettingsPage() {
           <div className="panel">
             <h3>Dashboard Visibility</h3>
             <p>Choose which characters appear on the dashboard.</p>
+            <label className="saved-toggle">
+              <input
+                type="checkbox"
+                checked={showOnlyLevel60}
+                onChange={(event) => setShowOnlyLevel60(event.target.checked)}
+              />
+              Show only level 60
+            </label>
             <ul className="simple-list">
-              {data.characters.map((character) => (
+              {data.characters
+                .filter((character) => !showOnlyLevel60 || Number(character.level) === 60)
+                .map((character) => (
                 <li key={character.id}>
                   <span>
                     {character.name} - {character.realm} - {character.accountId
                       ? accountNameById.get(character.accountId) || "Unknown account"
-                      : "Unassigned"}
+                      : "Unassigned"} - L{character.level ?? "?"}
                   </span>
                   <label className="saved-toggle">
                     <input

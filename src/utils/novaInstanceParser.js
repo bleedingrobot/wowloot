@@ -164,7 +164,8 @@ export function parseNovaCharacters(luaText) {
         name: ctx.characterName,
         realm: ctx.realm,
         className: ctx.classLocalized || "Unknown",
-        faction: inferFaction(ctx.raceEnglish)
+        faction: inferFaction(ctx.raceEnglish),
+        level: typeof ctx.level === "number" ? ctx.level : null
       });
     }
   };
@@ -184,7 +185,8 @@ export function parseNovaCharacters(luaText) {
         realm: null,
         characterName: null,
         classLocalized: null,
-        raceEnglish: null
+        raceEnglish: null,
+        level: null
       };
 
       if (parent?.key === "global") {
@@ -218,6 +220,11 @@ export function parseNovaCharacters(luaText) {
       const raceMatch = trimmed.match(/^\["raceEnglish"\]\s*=\s*"([^"]+)",?$/);
       if (raceMatch) {
         current.raceEnglish = raceMatch[1];
+      }
+
+      const levelMatch = trimmed.match(/^\["level"\]\s*=\s*(\d+),?$/);
+      if (levelMatch) {
+        current.level = Number(levelMatch[1]);
       }
     }
 
