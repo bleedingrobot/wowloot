@@ -61,7 +61,8 @@ export function computeShoppingNeeds(character, profiles, inventoryItems) {
     .filter((item) => isCharacterMatch(item, character))
     .forEach((item) => {
       const key = normalizeItemKey(item.itemName);
-      haveCounts.set(key, (haveCounts.get(key) || 0) + (item.count || 1));
+      const itemCount = Number(item.count);
+      haveCounts.set(key, (haveCounts.get(key) || 0) + (Number.isFinite(itemCount) && itemCount > 0 ? itemCount : 1));
     });
 
   const needs = [];

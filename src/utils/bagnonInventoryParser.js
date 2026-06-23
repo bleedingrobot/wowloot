@@ -67,7 +67,9 @@ function extractCount(line) {
     line.match(/\bcount\s*=\s*(\d+)/i),
     line.match(/\bstack\s*=\s*(\d+)/i),
     line.match(/\bquantity\s*=\s*(\d+)/i),
-    line.match(/\bamount\s*=\s*(\d+)/i)
+    line.match(/\bamount\s*=\s*(\d+)/i),
+    line.match(/;\s*(\d+)\s*(?:,|$)/),
+    line.match(/[x*]\s*(\d+)\s*(?:,|$)/i)
   ];
 
   for (const match of matches) {
@@ -182,16 +184,18 @@ export function parseBagnonInventory(luaText, fileName = "", accountHintName = "
     const activeCharacter = currentCharacter();
     const activeLocation = [...stack].reverse().find((entry) => entry.type === "location") || null;
     if (activeCharacter) {
-      const itemMatches = [...trimmed.matchAll(/\|Hitem:(\d+):.*?\|h\[(.*?)\]\|h\|r/g)];
+      const itemMatches = [...trimmed.matchAll(/\|Hitem:(\d+):.*?\|h\[(.*?)\]\|h\|r(?:[;x*](\d+))?/g)];
       if (itemMatches.length) {
-        const count = extractCount(trimmed);
         itemMatches.forEach((match, index) => {
+          const inlineCount = Number(match[3]);
+          const fallbackCount = extractCount(trimmed);
+          const parsedCount = Number.isFinite(inlineCount) && inlineCount > 0 ? inlineCount : fallbackCount;
           items.push({
             characterName: activeCharacter.name || fallbackCharacter || "Unknown",
             realm: activeCharacter.realm || "",
             itemId: Number(match[1]),
             itemName: match[2],
-            count,
+            count: parsedCount,
             locationGroup: activeLocation?.locationGroup || inferLocationGroup(activeLocation?.key || "bags", stack),
             bagKey: activeLocation?.key || "bags",
             slotIndex: index + 1,
