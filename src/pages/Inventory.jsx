@@ -47,7 +47,8 @@ function InventoryPage() {
     }
 
     return grouped.filter((group) => {
-      return normalize(group.itemName).includes(query) || String(group.itemId || "") === query;
+      const aliasMatch = (group.aliases || []).some((alias) => normalize(alias).includes(query));
+      return normalize(group.itemName).includes(query) || aliasMatch || String(group.itemId || "") === query;
     });
   }, [data.accounts, data.characters, inventoryItems, searchTerm]);
 

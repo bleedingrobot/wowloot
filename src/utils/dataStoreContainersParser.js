@@ -254,16 +254,32 @@ export function summarizeInventoryItems(items, characters = [], accounts = []) {
   const groups = new Map();
 
   items.forEach((item) => {
-    const queryKey = `${item.itemId || ""}|${normalize(item.itemName)}`;
+    const normalizedName = normalize(item.itemName);
+    const hasItemId = Number.isFinite(Number(item.itemId)) && Number(item.itemId) > 0;
+    const safeItemId = hasItemId ? Number(item.itemId) : null;
+    const queryKey = hasItemId ? `id:${safeItemId}` : `name:${normalizedName}`;
+
     if (!groups.has(queryKey)) {
       groups.set(queryKey, {
-        itemId: item.itemId,
-        itemName: item.itemName,
-        owners: new Map()
+        itemId: safeItemId,
+        itemName: item.itemName || "Unknown item",
+        aliases: new Set(),
+        owners: new Map(),
+        hasKnownName: Boolean(item.itemName && normalize(item.itemName) !== "unknown item")
       });
     }
 
     const group = groups.get(queryKey);
+    if (item.itemName) {
+      group.aliases.add(item.itemName);
+    }
+
+    const incomingIsKnown = Boolean(item.itemName && normalize(item.itemName) !== "unknown item");
+    if (incomingIsKnown && (!group.hasKnownName || normalize(group.itemName) === "unknown item")) {
+      group.itemName = item.itemName;
+      group.hasKnownName = true;
+    }
+
     const ownerKey = `${normalize(item.characterName)}|${normalize(item.realm)}`;
 
     if (!group.owners.has(ownerKey)) {
@@ -294,6 +310,7 @@ export function summarizeInventoryItems(items, characters = [], accounts = []) {
   return [...groups.values()]
     .map((group) => ({
       ...group,
+      aliases: [...group.aliases],
       owners: [...group.owners.values()]
         .map((owner) => ({
           ...owner,
