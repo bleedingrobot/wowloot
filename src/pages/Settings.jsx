@@ -18,9 +18,20 @@ import {
   saveConnectedFileMeta,
   saveConnectedHandles
 } from "../utils/novaFileConnections";
+import { parseBagnonInventory, summarizeBagnonInventory } from "../utils/bagnonInventoryParser";
+import {
+  buildConnectedFileEntries as buildBagnonConnectedFileEntries,
+  loadConnectedHandles as loadBagnonConnectedHandles,
+  mergeConnectedHandles as mergeBagnonConnectedHandles,
+  readConnectedFileMeta as readBagnonConnectedFileMeta,
+  saveConnectedFileMeta as saveBagnonConnectedFileMeta,
+  saveConnectedHandles as saveBagnonConnectedHandles
+} from "../utils/bagnonFileConnections";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
+const BAGNON_PATHS_KEY = "bagnon_savedvariables_paths";
+const BAGNON_SELECTED_FILE_INDEXES_KEY = "bagnon_selected_file_indexes";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -42,18 +53,29 @@ function getUniqueAccountHint(paths) {
   return accounts.length === 1 ? accounts[0] : "";
 }
 
+function getFileLabelHint(paths) {
+  const labels = Array.from(new Set(paths.map((path) => String(path || "").trim()).filter(Boolean)));
+  return labels.length === 1 ? labels[0] : "";
+}
+
 function SettingsPage() {
   const { user, hasFirebaseConfig, signInWithGoogle, signOutUser } = useAuth();
   const { data } = useUserCollections(user?.uid);
   const [nitPaths, setNitPaths] = useState([]);
   const [syncMessage, setSyncMessage] = useState("");
+  const [bagnonSyncMessage, setBagnonSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isBagnonSyncing, setIsBagnonSyncing] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
   const [connectedFiles, setConnectedFiles] = useState([]);
   const [pendingConnectHandles, setPendingConnectHandles] = useState([]);
   const [pendingAccountName, setPendingAccountName] = useState("");
+  const [bagnonPaths, setBagnonPaths] = useState([]);
+  const [bagnonConnectedFiles, setBagnonConnectedFiles] = useState([]);
+  const [pendingBagnonConnectHandles, setPendingBagnonConnectHandles] = useState([]);
+  const [pendingBagnonAccountName, setPendingBagnonAccountName] = useState("");
   const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
 
   const readSelectedFileIndexes = () => {
@@ -71,6 +93,23 @@ function SettingsPage() {
 
   const saveSelectedFileIndexes = (indexes) => {
     localStorage.setItem(NIT_SELECTED_FILE_INDEXES_KEY, JSON.stringify(indexes));
+  };
+
+  const readBagnonSelectedFileIndexes = () => {
+    try {
+      const raw = localStorage.getItem(BAGNON_SELECTED_FILE_INDEXES_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((value) => Number.isInteger(value) && value >= 0) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const saveBagnonSelectedFileIndexes = (indexes) => {
+    localStorage.setItem(BAGNON_SELECTED_FILE_INDEXES_KEY, JSON.stringify(indexes));
   };
 
   useEffect(() => {
@@ -94,6 +133,27 @@ function SettingsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const savedRaw = localStorage.getItem(BAGNON_PATHS_KEY);
+    if (!savedRaw) {
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(savedRaw);
+      if (Array.isArray(parsed)) {
+        setBagnonPaths(parsed.filter(Boolean));
+        return;
+      }
+    } catch {
+      // Backward compatibility with old single-path storage.
+    }
+
+    if (savedRaw.trim()) {
+      setBagnonPaths([savedRaw.trim()]);
+    }
+  }, []);
+
   const hydrateConnectedFiles = useCallback(() => {
     if (!window.indexedDB) {
       return;
@@ -114,9 +174,34 @@ function SettingsPage() {
     hydrateConnectedFiles();
   }, [hydrateConnectedFiles]);
 
+  const hydrateBagnonConnectedFiles = useCallback(() => {
+    if (!window.indexedDB) {
+      return;
+    }
+
+    loadBagnonConnectedHandles()
+      .then((handles) => {
+        const selectedIndexes = readBagnonSelectedFileIndexes();
+        const meta = readBagnonConnectedFileMeta();
+        setBagnonConnectedFiles(buildBagnonConnectedFileEntries(handles, meta, selectedIndexes));
+      })
+      .catch(() => {
+        setBagnonConnectedFiles([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    hydrateBagnonConnectedFiles();
+  }, [hydrateBagnonConnectedFiles]);
+
   const savePaths = (paths) => {
     setNitPaths(paths);
     localStorage.setItem(NIT_PATHS_KEY, JSON.stringify(paths));
+  };
+
+  const saveBagnonPaths = (paths) => {
+    setBagnonPaths(paths);
+    localStorage.setItem(BAGNON_PATHS_KEY, JSON.stringify(paths));
   };
 
   const syncFromLuaTexts = async (sources) => {
@@ -360,6 +445,214 @@ function SettingsPage() {
     }
   };
 
+  const syncBagnonFromLuaTexts = async (sources) => {
+    if (!user) {
+      return;
+    }
+
+    setIsBagnonSyncing(true);
+    setBagnonSyncMessage("Sync in progress...");
+
+    try {
+      const parsedItems = [];
+
+      for (const source of sources) {
+        parsedItems.push(...parseBagnonInventory(source.text, source.fileName, source.accountHintName));
+      }
+
+      await replaceInventoryItems(user.uid, parsedItems);
+
+      const grouped = summarizeBagnonInventory(parsedItems, data.characters, data.accounts);
+      setBagnonSyncMessage(
+        `Sync complete. Imported ${parsedItems.length} item stacks across ${grouped.length} unique item(s).`
+      );
+    } catch (error) {
+      setBagnonSyncMessage("Sync failed. Ensure you selected valid Bagnon SavedVariables files.");
+    } finally {
+      setIsBagnonSyncing(false);
+    }
+  };
+
+  const onConnectBagnonFiles = async () => {
+    if (!window.showOpenFilePicker) {
+      setBagnonSyncMessage("Your browser does not support direct file connections. Use Update and pick files.");
+      return;
+    }
+
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: true,
+        types: [
+          {
+            description: "Lua files",
+            accept: {
+              "text/plain": [".lua"]
+            }
+          }
+        ]
+      });
+
+      if (!handles.length) {
+        return;
+      }
+
+      setPendingBagnonConnectHandles(handles);
+      setPendingBagnonAccountName(
+        getUniqueAccountHint(bagnonPaths) || getFileLabelHint(bagnonConnectedFiles.map((item) => item.fileName))
+      );
+      setBagnonSyncMessage("Set account name for selected files, then confirm.");
+    } catch {
+      // User cancelled picker.
+    }
+  };
+
+  const onCancelPendingBagnonConnect = () => {
+    setPendingBagnonConnectHandles([]);
+    setPendingBagnonAccountName("");
+  };
+
+  const onConfirmPendingBagnonConnect = async () => {
+    if (!pendingBagnonConnectHandles.length) {
+      return;
+    }
+
+    try {
+      const accountHintName = pendingBagnonAccountName.trim();
+      const existingHandles = await loadBagnonConnectedHandles();
+      const existingMeta = readBagnonConnectedFileMeta();
+
+      const merged = await mergeBagnonConnectedHandles(existingHandles, pendingBagnonConnectHandles);
+      const addedCount = merged.length - existingHandles.length;
+      const nextMeta = [...existingMeta];
+      for (let index = 0; index < addedCount; index += 1) {
+        nextMeta.push({ accountName: accountHintName, fileName: pendingBagnonConnectHandles[index]?.name || "" });
+      }
+
+      await saveBagnonConnectedHandles(merged);
+      saveBagnonConnectedFileMeta(nextMeta);
+      setBagnonConnectedFiles(buildBagnonConnectedFileEntries(merged, nextMeta));
+      saveBagnonSelectedFileIndexes(merged.map((_, index) => index));
+      if (accountHintName) {
+        saveBagnonPaths([accountHintName]);
+      }
+      setBagnonSyncMessage(
+        `Added ${pendingBagnonConnectHandles.length} file selection(s). ${merged.length} Bagnon file(s) now connected.`
+      );
+      setPendingBagnonConnectHandles([]);
+      setPendingBagnonAccountName("");
+    } catch {
+      setBagnonSyncMessage("Could not connect selected files. Try again.");
+    }
+  };
+
+  const onReconnectBagnonConnectedFile = async (index) => {
+    if (!window.showOpenFilePicker) {
+      setBagnonSyncMessage("Your browser does not support direct file connections. Use Connect Bagnon and pick files.");
+      return;
+    }
+
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: "Lua files",
+            accept: {
+              "text/plain": [".lua"]
+            }
+          }
+        ]
+      });
+
+      if (!handles.length) {
+        return;
+      }
+
+      const nextHandles = await loadBagnonConnectedHandles();
+      nextHandles[index] = handles[0];
+      const nextMeta = readBagnonConnectedFileMeta();
+      nextMeta[index] = {
+        accountName: bagnonConnectedFiles[index]?.accountName || nextMeta[index]?.accountName || "",
+        fileName: handles[0].name || ""
+      };
+
+      await saveBagnonConnectedHandles(nextHandles);
+      saveBagnonConnectedFileMeta(nextMeta);
+      setBagnonConnectedFiles(buildBagnonConnectedFileEntries(nextHandles, nextMeta, readBagnonSelectedFileIndexes()));
+      setBagnonSyncMessage(`Reconnected ${handles[0].name || "selected file"}.`);
+    } catch {
+      setBagnonSyncMessage("Could not reconnect the file. Try again.");
+    }
+  };
+
+  const onUpdateFromBagnonConnectedFiles = async (silent = false) => {
+    try {
+      const selectedSources = bagnonConnectedFiles
+        .filter((item) => item.selected)
+        .map((item) => ({ handle: item.handle, accountHintName: item.accountName, fileName: item.fileName }));
+
+      if (!selectedSources.length) {
+        if (!silent) {
+          setBagnonSyncMessage("Select at least one connected Bagnon file to sync.");
+        }
+        return;
+      }
+
+      const sources = [];
+      for (const source of selectedSources) {
+        const handle = source.handle;
+        let permission = "granted";
+        if (handle.queryPermission) {
+          permission = await handle.queryPermission({ mode: "read" });
+        }
+        if (permission !== "granted") {
+          permission = await handle.requestPermission({ mode: "read" });
+        }
+        if (permission !== "granted") {
+          throw new Error("permission-denied");
+        }
+
+        const file = await handle.getFile();
+        sources.push({
+          text: await file.text(),
+          accountHintName: source.accountHintName,
+          fileName: source.fileName || file.name
+        });
+      }
+
+      await syncBagnonFromLuaTexts(sources);
+    } catch {
+      if (!silent) {
+        setBagnonSyncMessage("Could not read selected connected files. Reconnect files and try again.");
+      }
+    }
+  };
+
+  const onToggleBagnonConnectedFile = (id, checked) => {
+    setBagnonConnectedFiles((prev) => {
+      const next = prev.map((item) => (item.id === id ? { ...item, selected: checked } : item));
+      const selectedIndexes = next
+        .map((item, index) => (item.selected ? index : -1))
+        .filter((value) => value >= 0);
+      saveBagnonSelectedFileIndexes(selectedIndexes);
+      return next;
+    });
+  };
+
+  const onRemoveBagnonConnectedFile = async (id) => {
+    const next = bagnonConnectedFiles.filter((item) => item.id !== id);
+    setBagnonConnectedFiles(next);
+    await saveBagnonConnectedHandles(next.map((item) => item.handle));
+    saveBagnonConnectedFileMeta(
+      next.map((item) => ({ accountName: item.accountName || "", fileName: item.fileName || item.name || "" }))
+    );
+    const selectedIndexes = next
+      .map((item, index) => (item.selected ? index : -1))
+      .filter((value) => value >= 0);
+    saveBagnonSelectedFileIndexes(selectedIndexes);
+    setBagnonSyncMessage(`Connected file removed. ${next.length} remaining.`);
+  };
+
   const onReconnectConnectedFile = async (index) => {
     if (!window.showOpenFilePicker) {
       setSyncMessage("Your browser does not support direct file connections. Use Connect Nova and pick files.");
@@ -493,10 +786,15 @@ function SettingsPage() {
     try {
       await deleteAllUserData(user.uid);
       localStorage.removeItem(NIT_PATHS_KEY);
+      localStorage.removeItem(BAGNON_PATHS_KEY);
       await saveConnectedHandles([]);
+      await saveBagnonConnectedHandles([]);
       setNitPaths([]);
+      setBagnonPaths([]);
       setConnectedFiles([]);
+      setBagnonConnectedFiles([]);
       saveSelectedFileIndexes([]);
+      saveBagnonSelectedFileIndexes([]);
       setSyncMessage("All data deleted.");
     } catch {
       setSyncMessage("Delete failed. Please try again.");
@@ -580,6 +878,79 @@ function SettingsPage() {
                     Confirm Connection
                   </button>
                   <button type="button" className="secondary-btn" onClick={onCancelPendingConnect}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="panel sync-panel">
+            <h3>Bagnon Inventory Sync</h3>
+            <p>
+              Connect Bagnon files once, then use Sync Selected to refresh your bag and bank inventory index.
+            </p>
+            <div className="row-actions">
+              <button type="button" onClick={onConnectBagnonFiles} disabled={isBagnonSyncing}>
+                Connect Bagnon
+              </button>
+              <button type="button" onClick={onUpdateFromBagnonConnectedFiles} disabled={isBagnonSyncing}>
+                {isBagnonSyncing ? "Syncing..." : "Sync Selected"}
+              </button>
+            </div>
+            <h4>Connected Files</h4>
+            <ul className="simple-list">
+              {bagnonConnectedFiles.length ? (
+                bagnonConnectedFiles.map((item) => (
+                  <li key={item.id}>
+                    <label className="saved-toggle">
+                      <input
+                        type="checkbox"
+                        checked={item.selected}
+                        onChange={(event) => onToggleBagnonConnectedFile(item.id, event.target.checked)}
+                      />
+                      {item.name}{item.accountName ? ` (${item.accountName})` : ""}
+                    </label>
+                    <div className="row-actions">
+                      <button
+                        type="button"
+                        className="secondary-btn"
+                        onClick={() => onReconnectBagnonConnectedFile(bagnonConnectedFiles.findIndex((entry) => entry.id === item.id))}
+                      >
+                        Reconnect
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => onRemoveBagnonConnectedFile(item.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </li>
+                ))
+              ) : (
+                <li>No connected files yet. Click Connect Bagnon once.</li>
+              )}
+            </ul>
+            {bagnonSyncMessage ? <p>{bagnonSyncMessage}</p> : null}
+
+            {pendingBagnonConnectHandles.length ? (
+              <div className="panel">
+                <h4>Set Account For New Files</h4>
+                <p className="subtitle">
+                  {pendingBagnonConnectHandles.length} selected file(s) awaiting confirmation.
+                </p>
+                <input
+                  value={pendingBagnonAccountName}
+                  onChange={(event) => setPendingBagnonAccountName(event.target.value)}
+                  placeholder="Account or folder label"
+                />
+                <div className="row-actions">
+                  <button type="button" onClick={onConfirmPendingBagnonConnect}>
+                    Confirm Connection
+                  </button>
+                  <button type="button" className="secondary-btn" onClick={onCancelPendingBagnonConnect}>
                     Cancel
                   </button>
                 </div>
