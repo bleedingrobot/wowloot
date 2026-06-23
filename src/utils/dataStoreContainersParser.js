@@ -17,19 +17,27 @@ function parseCharacterKey(key) {
 }
 
 function parseItemLink(link) {
-  const match = String(link || "").match(/\|Hitem:(\d+):.*?\|h\[(.*?)\]\|h(?:\|r)?/);
+  const text = String(link || "");
+  const match = text.match(/\|Hitem:(\d+):.*?\|h\[(.*?)\]\|h(?:\|r)?/);
   if (!match) {
-    return { itemId: null, itemName: "" };
+    return { itemId: null, itemName: "", stackCount: null };
   }
+
+  const stackMatch = text.match(/[;x*](\d+)\s*(?:,|$)/i);
+  const stackCount = stackMatch ? Number(stackMatch[1]) : null;
 
   return {
     itemId: Number(match[1]),
-    itemName: match[2]
+    itemName: match[2],
+    stackCount: Number.isFinite(stackCount) && stackCount > 0 ? stackCount : null
   };
 }
 
 function parseLuaValue(raw) {
-  const value = String(raw || "").trim().replace(/,$/, "");
+  const value = String(raw || "")
+    .replace(/--.*$/, "")
+    .trim()
+    .replace(/,$/, "");
 
   if (!value || value === "nil") {
     return null;
@@ -137,12 +145,17 @@ export function parseDataStoreContainers(luaText, fileName = "") {
         continue;
       }
 
+      const parsedCount = Number(count);
+      const safeCount = Number.isFinite(parsedCount) && parsedCount > 0
+        ? parsedCount
+        : parsed.stackCount || 1;
+
       items.push({
         characterName: ctx.characterName,
         realm: ctx.realm,
         itemId: safeItemId,
         itemName,
-        count: Number.isFinite(count) && count > 0 ? count : 1,
+        count: safeCount,
         locationGroup: ctx.group,
         bagKey: ctx.bagKey,
         slotIndex: slotIndex + 1,
