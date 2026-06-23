@@ -9,9 +9,16 @@ function RaidsPage() {
   const { data } = useUserCollections(user?.uid);
   const visibleCharacters = data.characters.filter((character) => character.showOnDashboard !== false);
 
-  if (!user) {
-    return <p className="empty-panel">Sign in to view raid lockouts.</p>;
-  }
+  const factionOrder = (faction) => {
+    const value = String(faction || "").toLowerCase();
+    if (value === "alliance") {
+      return 0;
+    }
+    if (value === "horde") {
+      return 1;
+    }
+    return 2;
+  };
 
   const accountNameById = useMemo(
     () => new Map(data.accounts.map((account) => [account.id, account.battleNetId])),
@@ -25,6 +32,11 @@ function RaidsPage() {
   };
 
   const sortedCharacters = [...visibleCharacters].sort((a, b) => {
+    const factionDiff = factionOrder(a.faction) - factionOrder(b.faction);
+    if (factionDiff !== 0) {
+      return factionDiff;
+    }
+
     const lockedCountA = RAIDS.reduce((count, raid) => {
       const status = getStatus(a.id, raid.name);
       return count + (isRaidLocked(status) ? 1 : 0);
@@ -61,6 +73,10 @@ function RaidsPage() {
     );
   };
 
+  if (!user) {
+    return <p className="empty-panel">Sign in to view raid lockouts.</p>;
+  }
+
   return (
     <section className="panel">
       <h2>Raid Lockout Tracking</h2>
@@ -83,7 +99,16 @@ function RaidsPage() {
             </thead>
             <tbody>
               {sortedCharacters.map((character) => (
-                <tr key={character.id}>
+                <tr
+                  key={character.id}
+                  className={
+                    character.faction === "Alliance"
+                      ? "faction-row-alliance"
+                      : character.faction === "Horde"
+                        ? "faction-row-horde"
+                        : ""
+                  }
+                >
                   <td>{character.name}</td>
                   <td>{character.realm || "-"}</td>
                   <td>

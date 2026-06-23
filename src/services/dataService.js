@@ -16,6 +16,7 @@ import { db } from "./firebase";
 const COLLECTIONS = {
   accounts: "accounts",
   characters: "characters",
+  inventoryItems: "inventoryItems",
   raidStatuses: "raidStatuses",
   lootItems: "lootItems"
 };
@@ -29,6 +30,18 @@ export function subscribeUserCollection(collectionName, uid, callback) {
   const q = query(collection(db, collectionName), where("userId", "==", uid));
 
   return onSnapshot(q, (snapshot) => {
+    const docs = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
+    callback(docs);
+  });
+}
+
+export function subscribeAllCollection(collectionName, callback) {
+  if (!db) {
+    callback([]);
+    return () => {};
+  }
+
+  return onSnapshot(collection(db, collectionName), (snapshot) => {
     const docs = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
     callback(docs);
   });
@@ -83,6 +96,57 @@ export function updateLootItem(lootId, payload) {
 
 export function deleteLootItem(lootId) {
   return deleteDoc(doc(db, COLLECTIONS.lootItems, lootId));
+}
+
+export async function replaceInventoryItems(uid, items) {
+  if (!db || !uid) {
+    return;
+  }
+
+  const existing = await getDocs(
+    query(collection(db, COLLECTIONS.inventoryItems), where("userId", "==", uid))
+  );
+
+  let batch = writeBatch(db);
+  let opCount = 0;
+
+  for (const item of existing.docs) {
+    batch.delete(item.ref);
+    opCount += 1;
+
+    if (opCount === 450) {
+      await batch.commit();
+      batch = writeBatch(db);
+      opCount = 0;
+    }
+  }
+
+  if (opCount > 0) {
+    await batch.commit();
+  }
+
+  batch = writeBatch(db);
+  opCount = 0;
+  const createdAt = new Date().toISOString();
+
+  for (const item of items) {
+    batch.set(doc(collection(db, COLLECTIONS.inventoryItems)), {
+      userId: uid,
+      ...item,
+      createdAt
+    });
+    opCount += 1;
+
+    if (opCount === 450) {
+      await batch.commit();
+      batch = writeBatch(db);
+      opCount = 0;
+    }
+  }
+
+  if (opCount > 0) {
+    await batch.commit();
+  }
 }
 
 export async function deleteAllUserData(uid) {

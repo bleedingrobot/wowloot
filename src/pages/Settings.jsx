@@ -9,15 +9,18 @@ import {
   updateCharacter,
   upsertRaidStatus
 } from "../services/dataService";
-import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import { parseNovaActiveInstances, parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import {
+  buildConnectedFileEntries,
+  loadConnectedHandles,
+  mergeConnectedHandles,
+  readConnectedFileMeta,
+  saveConnectedFileMeta,
+  saveConnectedHandles
+} from "../utils/novaFileConnections";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
-const NIT_HANDLE_DB = "wowloot-nit-handles";
-const NIT_HANDLE_STORE = "handles";
-const NIT_HANDLE_KEY = "nova-files";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
-const NIT_AUTO_SYNC_ENABLED_KEY = "nit_auto_sync_enabled";
-const NIT_CONNECTED_FILE_META_KEY = "nit_connected_file_meta";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -39,102 +42,12 @@ function getUniqueAccountHint(paths) {
   return accounts.length === 1 ? accounts[0] : "";
 }
 
-function openHandleDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(NIT_HANDLE_DB, 1);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(NIT_HANDLE_STORE)) {
-        db.createObjectStore(NIT_HANDLE_STORE);
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function saveConnectedHandles(handles) {
-  const db = await openHandleDb();
-  await new Promise((resolve, reject) => {
-    const tx = db.transaction(NIT_HANDLE_STORE, "readwrite");
-    tx.objectStore(NIT_HANDLE_STORE).put(handles, NIT_HANDLE_KEY);
-    tx.oncomplete = resolve;
-    tx.onerror = () => reject(tx.error);
-  });
-  db.close();
-}
-
-async function loadConnectedHandles() {
-  const db = await openHandleDb();
-  const handles = await new Promise((resolve, reject) => {
-    const tx = db.transaction(NIT_HANDLE_STORE, "readonly");
-    const req = tx.objectStore(NIT_HANDLE_STORE).get(NIT_HANDLE_KEY);
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-  db.close();
-  return handles;
-}
-
-async function hasSameEntry(handleA, handleB) {
-  if (typeof handleA?.isSameEntry !== "function") {
-    return false;
-  }
-
-  try {
-    return await handleA.isSameEntry(handleB);
-  } catch {
-    return false;
-  }
-}
-
-async function mergeConnectedHandles(existingHandles, newHandles) {
-  const merged = [...existingHandles];
-
-  for (const nextHandle of newHandles) {
-    let exists = false;
-
-    for (const currentHandle of merged) {
-      if (await hasSameEntry(currentHandle, nextHandle)) {
-        exists = true;
-        break;
-      }
-    }
-
-    if (!exists) {
-      merged.push(nextHandle);
-    }
-  }
-
-  return merged;
-}
-
-function readConnectedFileMeta() {
-  try {
-    const raw = localStorage.getItem(NIT_CONNECTED_FILE_META_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveConnectedFileMeta(meta) {
-  localStorage.setItem(NIT_CONNECTED_FILE_META_KEY, JSON.stringify(meta));
-}
-
 function SettingsPage() {
   const { user, hasFirebaseConfig, signInWithGoogle, signOutUser } = useAuth();
   const { data } = useUserCollections(user?.uid);
   const [nitPaths, setNitPaths] = useState([]);
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
-  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
   const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
   const [savingVisibilityId, setSavingVisibilityId] = useState("");
@@ -190,18 +103,7 @@ function SettingsPage() {
       .then((handles) => {
         const selectedIndexes = readSelectedFileIndexes();
         const meta = readConnectedFileMeta();
-        const selectedSet = new Set(selectedIndexes);
-        const hasSelection = selectedSet.size > 0;
-
-        setConnectedFiles(
-          handles.map((handle, index) => ({
-            id: `${handle?.name || "file"}-${index}`,
-            name: handle?.name || "Unknown file",
-            selected: hasSelection ? selectedSet.has(index) : true,
-            accountName: meta[index]?.accountName || "",
-            handle
-          }))
-        );
+        setConnectedFiles(buildConnectedFileEntries(handles, meta, selectedIndexes));
       })
       .catch(() => {
         setConnectedFiles([]);
@@ -211,18 +113,6 @@ function SettingsPage() {
   useEffect(() => {
     hydrateConnectedFiles();
   }, [hydrateConnectedFiles]);
-
-  useEffect(() => {
-    const raw = localStorage.getItem(NIT_AUTO_SYNC_ENABLED_KEY);
-    if (raw === null) {
-      return;
-    }
-    setAutoSyncEnabled(raw !== "false");
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem(NIT_AUTO_SYNC_ENABLED_KEY, autoSyncEnabled ? "true" : "false");
-  }, [autoSyncEnabled]);
 
   const savePaths = (paths) => {
     setNitPaths(paths);
@@ -241,6 +131,7 @@ function SettingsPage() {
       const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
       const parsedCharacters = [];
       const parsed = [];
+      const activeRaids = [];
 
       for (const source of sources) {
         const sourceAccount = (source.accountHintName || "").trim();
@@ -261,6 +152,7 @@ function SettingsPage() {
         }));
         parsedCharacters.push(...parsedFromSource);
         parsed.push(...parseNovaSavedInstances(source.text));
+        activeRaids.push(...parseNovaActiveInstances(source.text));
       }
 
       const dedupedParsedCharacters = new Map();
@@ -287,6 +179,7 @@ function SettingsPage() {
             realm: parsedCharacter.realm,
             accountId: parsedCharacter.accountId || defaultAccountId,
             level: typeof parsedCharacter.level === "number" ? parsedCharacter.level : null,
+            restedXp: typeof parsedCharacter.restedXp === "number" ? parsedCharacter.restedXp : 0,
             avatarUrl: "",
             showOnDashboard: true,
             importedFromNova: true
@@ -310,6 +203,13 @@ function SettingsPage() {
               updates.level = parsedCharacter.level;
               existing.level = parsedCharacter.level;
             }
+            if (
+              typeof parsedCharacter.restedXp === "number"
+              && existing.restedXp !== parsedCharacter.restedXp
+            ) {
+              updates.restedXp = parsedCharacter.restedXp;
+              existing.restedXp = parsedCharacter.restedXp;
+            }
 
             if (Object.keys(updates).length) {
               await updateCharacter(existing.id, updates);
@@ -322,8 +222,20 @@ function SettingsPage() {
             && typeof parsedCharacter.level === "number"
             && existing.level !== parsedCharacter.level
           ) {
-            await updateCharacter(existing.id, { level: parsedCharacter.level });
+            const updates = { level: parsedCharacter.level };
+            if (typeof parsedCharacter.restedXp === "number") {
+              updates.restedXp = parsedCharacter.restedXp;
+              existing.restedXp = parsedCharacter.restedXp;
+            }
+            await updateCharacter(existing.id, updates);
             existing.level = parsedCharacter.level;
+          } else if (
+            existing
+            && typeof parsedCharacter.restedXp === "number"
+            && existing.restedXp !== parsedCharacter.restedXp
+          ) {
+            await updateCharacter(existing.id, { restedXp: parsedCharacter.restedXp });
+            existing.restedXp = parsedCharacter.restedXp;
           }
         }
       }
@@ -367,8 +279,9 @@ function SettingsPage() {
       await Promise.all(updates);
 
       const totalMatches = parsed.length;
+      const currentRaidNames = Array.from(new Set(activeRaids.map((entry) => entry.raidName)));
       setSyncMessage(
-        `Sync complete. Imported ${totalMatches} saved raid entries and added ${createdCharacters.length} new characters.`
+        `Sync complete. Imported ${totalMatches} saved raid entries and added ${createdCharacters.length} new characters.${currentRaidNames.length ? ` Current raid activity: ${currentRaidNames.join(", ")}.` : ""}`
       );
     } catch (error) {
       setSyncMessage("Sync failed. Ensure you selected a valid NovaInstanceTracker.lua file.");
@@ -401,7 +314,7 @@ function SettingsPage() {
       }
 
       setPendingConnectHandles(handles);
-      setPendingAccountName(getUniqueAccountHint(nitPaths));
+      setPendingAccountName(getUniqueAccountHint(nitPaths) || getUniqueAccountHint(connectedFiles.map((item) => item.accountName)));
       setSyncMessage("Set account name for selected files, then confirm.");
     } catch {
       // User cancelled picker.
@@ -427,21 +340,16 @@ function SettingsPage() {
       const addedCount = merged.length - existingHandles.length;
       const nextMeta = [...existingMeta];
       for (let index = 0; index < addedCount; index += 1) {
-        nextMeta.push({ accountName: accountHintName });
+        nextMeta.push({ accountName: accountHintName, fileName: pendingConnectHandles[index]?.name || "" });
       }
 
       await saveConnectedHandles(merged);
       saveConnectedFileMeta(nextMeta);
-      setConnectedFiles(
-        merged.map((handle, index) => ({
-          id: `${handle?.name || "file"}-${index}`,
-          name: handle?.name || "Unknown file",
-          selected: true,
-          accountName: nextMeta[index]?.accountName || "",
-          handle
-        }))
-      );
+      setConnectedFiles(buildConnectedFileEntries(merged, nextMeta));
       saveSelectedFileIndexes(merged.map((_, index) => index));
+      if (accountHintName) {
+        savePaths([accountHintName]);
+      }
       setSyncMessage(
         `Added ${pendingConnectHandles.length} file selection(s). ${merged.length} Nova file(s) now connected.`
       );
@@ -449,6 +357,46 @@ function SettingsPage() {
       setPendingAccountName("");
     } catch {
       setSyncMessage("Could not connect selected files. Try again.");
+    }
+  };
+
+  const onReconnectConnectedFile = async (index) => {
+    if (!window.showOpenFilePicker) {
+      setSyncMessage("Your browser does not support direct file connections. Use Connect Nova and pick files.");
+      return;
+    }
+
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: "Lua files",
+            accept: {
+              "text/plain": [".lua"]
+            }
+          }
+        ]
+      });
+
+      if (!handles.length) {
+        return;
+      }
+
+      const nextHandles = await loadConnectedHandles();
+      nextHandles[index] = handles[0];
+      const nextMeta = readConnectedFileMeta();
+      nextMeta[index] = {
+        accountName: connectedFiles[index]?.accountName || nextMeta[index]?.accountName || "",
+        fileName: handles[0].name || ""
+      };
+
+      await saveConnectedHandles(nextHandles);
+      saveConnectedFileMeta(nextMeta);
+      setConnectedFiles(buildConnectedFileEntries(nextHandles, nextMeta, readSelectedFileIndexes()));
+      setSyncMessage(`Reconnected ${handles[0].name || "selected file"}.`);
+    } catch {
+      setSyncMessage("Could not reconnect the file. Try again.");
     }
   };
 
@@ -472,7 +420,7 @@ function SettingsPage() {
         if (handle.queryPermission) {
           permission = await handle.queryPermission({ mode: "read" });
         }
-        if (permission !== "granted" && handle.requestPermission) {
+        if (permission !== "granted") {
           permission = await handle.requestPermission({ mode: "read" });
         }
         if (permission !== "granted") {
@@ -509,25 +457,15 @@ function SettingsPage() {
     const next = connectedFiles.filter((item) => item.id !== id);
     setConnectedFiles(next);
     await saveConnectedHandles(next.map((item) => item.handle));
-    saveConnectedFileMeta(next.map((item) => ({ accountName: item.accountName || "" })));
+    saveConnectedFileMeta(
+      next.map((item) => ({ accountName: item.accountName || "", fileName: item.fileName || item.name || "" }))
+    );
     const selectedIndexes = next
       .map((item, index) => (item.selected ? index : -1))
       .filter((value) => value >= 0);
     saveSelectedFileIndexes(selectedIndexes);
     setSyncMessage(`Connected file removed. ${next.length} remaining.`);
   };
-
-  useEffect(() => {
-    if (!user || !autoSyncEnabled) {
-      return;
-    }
-
-    const intervalId = window.setInterval(() => {
-      onUpdateFromConnectedFiles(true);
-    }, 5 * 60 * 1000);
-
-    return () => window.clearInterval(intervalId);
-  }, [autoSyncEnabled, connectedFiles, user]);
 
   const onToggleDashboardVisibility = async (characterId, checked) => {
     setSavingVisibilityId(characterId);
@@ -555,7 +493,6 @@ function SettingsPage() {
     try {
       await deleteAllUserData(user.uid);
       localStorage.removeItem(NIT_PATHS_KEY);
-      localStorage.removeItem(NIT_CONNECTED_FILE_META_KEY);
       await saveConnectedHandles([]);
       setNitPaths([]);
       setConnectedFiles([]);
@@ -584,8 +521,7 @@ function SettingsPage() {
           <div className="panel sync-panel">
             <h3>NovaInstanceTracker Sync</h3>
             <p>
-              Connect Nova files once, then choose which connected files to sync now or auto-sync every
-              5 minutes.
+              Connect Nova files once, then use Sync Selected whenever you want to refresh the site.
             </p>
             <div className="row-actions">
               <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
@@ -595,17 +531,6 @@ function SettingsPage() {
                 {isSyncing ? "Syncing..." : "Sync Selected"}
               </button>
             </div>
-            <p className="subtitle">
-              Auto-sync every 5 minutes
-              <label className="saved-toggle" style={{ marginLeft: "0.55rem" }}>
-                <input
-                  type="checkbox"
-                  checked={autoSyncEnabled}
-                  onChange={(event) => setAutoSyncEnabled(event.target.checked)}
-                />
-                Enabled
-              </label>
-            </p>
             <h4>Connected Files</h4>
             <ul className="simple-list">
               {connectedFiles.length ? (
@@ -619,13 +544,18 @@ function SettingsPage() {
                       />
                       {item.name}{item.accountName ? ` (${item.accountName})` : ""}
                     </label>
-                    <button
-                      type="button"
-                      className="danger"
-                      onClick={() => onRemoveConnectedFile(item.id)}
-                    >
-                      Remove
-                    </button>
+                    <div className="row-actions">
+                      <button type="button" className="secondary-btn" onClick={() => onReconnectConnectedFile(connectedFiles.findIndex((entry) => entry.id === item.id))}>
+                        Reconnect
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => onRemoveConnectedFile(item.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </li>
                 ))
               ) : (

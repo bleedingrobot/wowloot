@@ -2,7 +2,8 @@ import { FALLBACK_ICON } from "../utils/classIcons";
 
 function CharacterCard({
   character,
-  metrics,
+  remainingLootCount,
+  lockedRaidCount,
   raidSummary,
   lockedRaidSummary,
   raidItemsByRaid,
@@ -29,8 +30,8 @@ function CharacterCard({
       </header>
 
       <section className="card-stats">
-        <p>Remaining wishlist: {metrics.remaining}</p>
-        <p>Locked raids: {metrics.lockedOut}</p>
+        <p>Remaining wishlist: {remainingLootCount}</p>
+        <p>Locked raids: {lockedRaidCount}</p>
       </section>
 
       <section>

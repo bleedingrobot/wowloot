@@ -1,11 +1,17 @@
 const RAID_NAME_MAP = {
   "Molten Core": "Molten Core",
+  MC: "Molten Core",
   "Blackwing Lair": "Blackwing Lair",
+  BWL: "Blackwing Lair",
   "Temple of Ahn'Qiraj": "Ahn'Qiraj 40",
   "Ahn'Qiraj Temple": "Ahn'Qiraj 40",
+  AQ40: "Ahn'Qiraj 40",
   "Ruins of Ahn'Qiraj": "Ruins of Ahn'Qiraj",
+  AQ20: "Ruins of Ahn'Qiraj",
   "Naxxramas": "Naxxramas",
+  NAXX: "Naxxramas",
   "Zul'Gurub": "Zul'Gurub",
+  ZG: "Zul'Gurub",
   "Onyxia's Lair": "Onyxia's Lair"
 };
 
@@ -13,7 +19,95 @@ const ALLIANCE_RACES = new Set(["Human", "Dwarf", "NightElf", "Gnome"]);
 const HORDE_RACES = new Set(["Orc", "Undead", "Scourge", "Tauren", "Troll"]);
 
 function normalizeRaidName(name) {
-  return RAID_NAME_MAP[name] || null;
+  const rawName = String(name || "").trim();
+  const baseName = rawName.replace(/\s*\((?:10|20|40) Player\)\s*$/i, "");
+  const compactName = baseName.replace(/\s+/g, "").toUpperCase();
+  return RAID_NAME_MAP[baseName] || RAID_NAME_MAP[rawName] || RAID_NAME_MAP[compactName] || null;
+}
+
+export function parseNovaActiveInstances(luaText) {
+  const lines = luaText.split(/\r?\n/);
+  const stack = [];
+  const results = [];
+
+  const pushContext = (ctx) => {
+    stack.push(ctx);
+  };
+
+  const popContext = () => {
+    const ctx = stack.pop();
+    if (ctx?.isInstanceEntry) {
+      const raidName = normalizeRaidName(ctx.entry.instanceName);
+      if (raidName && ctx.entry.enteredTime && !ctx.entry.leftTime) {
+        results.push({
+          playerName: ctx.entry.playerName || null,
+          raidName,
+          enteredTime: ctx.entry.enteredTime
+        });
+      }
+    }
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    const keyedOpen = trimmed.match(/^\["([^"]+)"\]\s*=\s*\{$/);
+    if (keyedOpen) {
+      pushContext({ key: keyedOpen[1], isInstanceEntry: false });
+      return;
+    }
+
+    const indexedOpen = trimmed.match(/^\[(\d+)\]\s*=\s*\{$/);
+    if (indexedOpen) {
+      pushContext({ key: indexedOpen[1], isInstanceEntry: true, entry: { instanceName: null, playerName: null, enteredTime: null, leftTime: null } });
+      return;
+    }
+
+    if (trimmed === "{" || trimmed.endsWith("= {")) {
+      pushContext({ key: null, isInstanceEntry: false });
+      return;
+    }
+
+    const current = stack[stack.length - 1];
+    if (current?.isInstanceEntry) {
+      const instanceNameMatch = trimmed.match(/^\["instanceName"\]\s*=\s*"([^"]+)",?$/);
+      if (instanceNameMatch) {
+        current.entry.instanceName = instanceNameMatch[1];
+      }
+
+      const playerNameMatch = trimmed.match(/^\["playerName"\]\s*=\s*"([^"]+)",?$/);
+      if (playerNameMatch) {
+        current.entry.playerName = playerNameMatch[1];
+      }
+
+      const enteredTimeMatch = trimmed.match(/^\["enteredTime"\]\s*=\s*(\d+),?$/);
+      if (enteredTimeMatch) {
+        current.entry.enteredTime = Number(enteredTimeMatch[1]);
+      }
+
+      const leftTimeMatch = trimmed.match(/^\["leftTime"\]\s*=\s*(\d+),?$/);
+      if (leftTimeMatch) {
+        current.entry.leftTime = Number(leftTimeMatch[1]);
+      }
+    }
+
+    const closes = (trimmed.match(/}/g) || []).length;
+    for (let index = 0; index < closes; index += 1) {
+      if (stack.length) {
+        popContext();
+      }
+    }
+  });
+
+  const deduped = new Map();
+  results.forEach((entry) => {
+    const key = `${entry.raidName}|${entry.enteredTime}`;
+    if (!deduped.has(key) || (deduped.get(key).enteredTime || 0) < entry.enteredTime) {
+      deduped.set(key, entry);
+    }
+  });
+
+  return [...deduped.values()].sort((a, b) => b.enteredTime - a.enteredTime);
 }
 
 export function parseNovaSavedInstances(luaText) {
@@ -165,7 +259,8 @@ export function parseNovaCharacters(luaText) {
         realm: ctx.realm,
         className: ctx.classLocalized || "Unknown",
         faction: inferFaction(ctx.raceEnglish),
-        level: typeof ctx.level === "number" ? ctx.level : null
+        level: typeof ctx.level === "number" ? ctx.level : null,
+        restedXp: typeof ctx.restedXp === "number" ? ctx.restedXp : null
       });
     }
   };
@@ -186,7 +281,8 @@ export function parseNovaCharacters(luaText) {
         characterName: null,
         classLocalized: null,
         raceEnglish: null,
-        level: null
+        level: null,
+        restedXp: null
       };
 
       if (parent?.key === "global") {
@@ -225,6 +321,11 @@ export function parseNovaCharacters(luaText) {
       const levelMatch = trimmed.match(/^\["level"\]\s*=\s*(\d+),?$/);
       if (levelMatch) {
         current.level = Number(levelMatch[1]);
+      }
+
+      const restedXpMatch = trimmed.match(/^\["restedXP"\]\s*=\s*(\d+),?$/);
+      if (restedXpMatch) {
+        current.restedXp = Number(restedXpMatch[1]);
       }
     }
 

@@ -1,21 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CharacterCard from "../components/CharacterCard";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
 import { getNextRaidReset, formatCountdown, isRaidLocked } from "../utils/raidReset";
-import { calculateUrgency, sortCharactersByUrgency } from "../utils/urgency";
 import { getClassIcon } from "../utils/classIcons";
-import { addAccount, addCharacter, upsertRaidStatus } from "../services/dataService";
-import { parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import { addAccount, addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
+import { parseNovaActiveInstances, parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import {
+  buildConnectedFileEntries,
+  loadConnectedHandles,
+  readConnectedFileMeta,
+  saveConnectedFileMeta,
+  saveConnectedHandles
+} from "../utils/novaFileConnections";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
-const NIT_HANDLE_DB = "wowloot-nit-handles";
-const NIT_HANDLE_STORE = "handles";
-const NIT_HANDLE_KEY = "nova-files";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
-const NIT_AUTO_SYNC_ENABLED_KEY = "nit_auto_sync_enabled";
-const NIT_CONNECTED_FILE_META_KEY = "nit_connected_file_meta";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -61,52 +62,6 @@ function getSelectedConnectedFileIndexes() {
   }
 }
 
-function isAutoSyncEnabled() {
-  const raw = localStorage.getItem(NIT_AUTO_SYNC_ENABLED_KEY);
-  return raw !== "false";
-}
-
-function getConnectedFileMeta() {
-  try {
-    const raw = localStorage.getItem(NIT_CONNECTED_FILE_META_KEY);
-    if (!raw) {
-      return [];
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function openHandleDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(NIT_HANDLE_DB, 1);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(NIT_HANDLE_STORE)) {
-        db.createObjectStore(NIT_HANDLE_STORE);
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
-
-async function loadConnectedHandles() {
-  const db = await openHandleDb();
-  const handles = await new Promise((resolve, reject) => {
-    const tx = db.transaction(NIT_HANDLE_STORE, "readonly");
-    const req = tx.objectStore(NIT_HANDLE_STORE).get(NIT_HANDLE_KEY);
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error);
-  });
-  db.close();
-  return handles;
-}
-
 function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
@@ -114,6 +69,8 @@ function DashboardPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState("idle");
   const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [activeRaidNames, setActiveRaidNames] = useState([]);
+  const [connectedFiles, setConnectedFiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [factionFilter, setFactionFilter] = useState("all");
@@ -122,6 +79,9 @@ function DashboardPage() {
   const [minLevelFilter, setMinLevelFilter] = useState("");
   const [needFilter, setNeedFilter] = useState("needed");
   const [availabilityFilter, setAvailabilityFilter] = useState("any");
+  const [sortBy, setSortBy] = useState("raids");
+  const [cooldownAlerts, setCooldownAlerts] = useState([]);
+  const previousLockedRaidsRef = useRef(null);
 
   const nextReset = getNextRaidReset("Naxxramas");
 
@@ -146,6 +106,10 @@ function DashboardPage() {
     () => new Map(data.accounts.map((account) => [account.id, account.battleNetId])),
     [data.accounts]
   );
+  const visibleCharacterById = useMemo(
+    () => new Map(visibleCharacters.map((character) => [character.id, character])),
+    [visibleCharacters]
+  );
   const accountOptions = useMemo(() => {
     const map = new Map();
 
@@ -165,12 +129,95 @@ function DashboardPage() {
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [visibleCharacters, accountNameById]);
 
+  const hydrateConnectedFiles = useCallback(() => {
+    loadConnectedHandles()
+      .then((handles) => {
+        const selectedIndexes = getSelectedConnectedFileIndexes();
+        const meta = readConnectedFileMeta();
+        setConnectedFiles(buildConnectedFileEntries(handles, meta, selectedIndexes));
+      })
+      .catch(() => {
+        setConnectedFiles([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    hydrateConnectedFiles();
+  }, [hydrateConnectedFiles]);
+
+  const collectLockedRaids = useCallback(() => {
+    const now = new Date();
+    const locked = new Map();
+
+    data.raidStatuses.forEach((status) => {
+      if (!status?.completed || !status?.resetDate) {
+        return;
+      }
+
+      const character = visibleCharacterById.get(status.characterId);
+      if (!character) {
+        return;
+      }
+
+      const resetTime = new Date(status.resetDate);
+      if (!(resetTime > now)) {
+        return;
+      }
+
+      const key = `${status.characterId}|${status.raidName}`;
+      locked.set(key, {
+        key,
+        characterName: character.name,
+        raidName: status.raidName
+      });
+    });
+
+    return locked;
+  }, [data.raidStatuses, visibleCharacterById]);
+
+  useEffect(() => {
+    const checkCooldownTransitions = () => {
+      const currentlyLocked = collectLockedRaids();
+
+      if (!previousLockedRaidsRef.current) {
+        previousLockedRaidsRef.current = currentlyLocked;
+        return;
+      }
+
+      const justUnlocked = [];
+      previousLockedRaidsRef.current.forEach((entry, key) => {
+        if (!currentlyLocked.has(key)) {
+          justUnlocked.push(entry);
+        }
+      });
+
+      if (justUnlocked.length) {
+        const nowMs = Date.now();
+        const alerts = justUnlocked.map((entry, index) => ({
+          id: `${entry.key}-${nowMs}-${index}`,
+          text: `${entry.characterName} is now unlocked for ${entry.raidName}.`
+        }));
+
+        setCooldownAlerts((prev) => [...alerts, ...prev].slice(0, 6));
+      }
+
+      previousLockedRaidsRef.current = currentlyLocked;
+    };
+
+    checkCooldownTransitions();
+    const intervalId = window.setInterval(checkCooldownTransitions, 30000);
+    return () => window.clearInterval(intervalId);
+  }, [collectLockedRaids]);
+
+  const dismissCooldownAlert = useCallback((id) => {
+    setCooldownAlerts((prev) => prev.filter((alert) => alert.id !== id));
+  }, []);
+
   const filteredEntries = useMemo(() => {
     const entries = visibleCharacters.map((character) => {
       const lootItems = data.lootItems.filter((item) => item.characterId === character.id);
       const remainingLootItems = lootItems.filter((item) => !item.obtained);
       const raidStatuses = data.raidStatuses.filter((status) => status.characterId === character.id);
-      const metrics = calculateUrgency(lootItems, raidStatuses);
 
       const availableRaids = RAIDS.filter((raid) => { 
         const status = raidStatuses.find((s) => s.raidName === raid.name);
@@ -215,7 +262,8 @@ function DashboardPage() {
 
       return {
         character,
-        metrics,
+        remainingLootCount: remainingLootItems.length,
+        lockedRaidCount: lockedRaids.length,
         raidSummary: raidNeedsSummary,
         lockedRaidSummary,
         raidItemsByRaid,
@@ -223,13 +271,18 @@ function DashboardPage() {
       };
     });
 
-    const sortedEntries = sortCharactersByUrgency(entries);
+    const sortedEntries = [...entries].sort((a, b) => {
+      if (sortBy === "raids") {
+        return b.lockedRaidCount - a.lockedRaidCount || a.character.name.localeCompare(b.character.name);
+      }
+      return a.character.name.localeCompare(b.character.name);
+    });
 
     return sortedEntries.filter((entry) => {
-      const needsMatch = needFilter === "all" || entry.metrics.remaining > 0;
+      const needsMatch = needFilter === "all" || entry.remainingLootCount > 0;
       let availabilityMatch = true;
       if (availabilityFilter === "locked") {
-        availabilityMatch = entry.metrics.lockedOut > 0;
+        availabilityMatch = entry.lockedRaidCount > 0;
       }
       if (availabilityFilter === "reset-ready") {
         availabilityMatch = entry.raidItemsByRaid.length > 0;
@@ -269,7 +322,8 @@ function DashboardPage() {
     realmFilter,
     accountFilter,
     minLevelFilter,
-    searchTerm
+    searchTerm,
+    sortBy
   ]);
 
   const syncFromLuaTexts = useCallback(async (luaTexts, { silent = false } = {}) => {
@@ -277,6 +331,7 @@ function DashboardPage() {
       return;
     }
 
+    console.log("[auto-sync] syncFromLuaTexts called with", luaTexts.length, "sources, silent=", silent);
     setIsSyncing(true);
     setSyncStatus("syncing");
     if (!silent) {
@@ -288,6 +343,7 @@ function DashboardPage() {
       const accountMap = new Map(data.accounts.map((account) => [normalize(account.battleNetId), account.id]));
       const parsedCharacters = [];
       const parsed = [];
+      const activeRaids = [];
 
       for (const source of luaTexts) {
         const sourceAccount = (source.accountHintName || accountHintName || "").trim();
@@ -308,6 +364,7 @@ function DashboardPage() {
         }));
         parsedCharacters.push(...parsedFromSource);
         parsed.push(...parseNovaSavedInstances(source.text));
+        activeRaids.push(...parseNovaActiveInstances(source.text));
       }
 
       const dedupedParsedCharacters = new Map();
@@ -334,6 +391,7 @@ function DashboardPage() {
             realm: parsedCharacter.realm,
             accountId: parsedCharacter.accountId || defaultAccountId,
             level: typeof parsedCharacter.level === "number" ? parsedCharacter.level : null,
+            restedXp: typeof parsedCharacter.restedXp === "number" ? parsedCharacter.restedXp : 0,
             avatarUrl: "",
             showOnDashboard: true,
             importedFromNova: true
@@ -342,6 +400,33 @@ function DashboardPage() {
           const createdCharacter = { id: created.id, ...payload };
           charactersByKey.set(key, createdCharacter);
           createdCharacters.push(createdCharacter);
+        } else {
+          const existing = charactersByKey.get(key);
+          if (existing) {
+            const updates = {};
+            if (!existing.accountId && (parsedCharacter.accountId || defaultAccountId)) {
+              updates.accountId = parsedCharacter.accountId || defaultAccountId;
+              existing.accountId = parsedCharacter.accountId || defaultAccountId;
+            }
+            if (
+              typeof parsedCharacter.level === "number"
+              && existing.level !== parsedCharacter.level
+            ) {
+              updates.level = parsedCharacter.level;
+              existing.level = parsedCharacter.level;
+            }
+            if (
+              typeof parsedCharacter.restedXp === "number"
+              && existing.restedXp !== parsedCharacter.restedXp
+            ) {
+              updates.restedXp = parsedCharacter.restedXp;
+              existing.restedXp = parsedCharacter.restedXp;
+            }
+
+            if (Object.keys(updates).length) {
+              await updateCharacter(existing.id, updates);
+            }
+          }
         }
       }
 
@@ -384,16 +469,43 @@ function DashboardPage() {
       await Promise.all(updates);
 
       const stamp = new Date().toLocaleTimeString();
+      const currentRaidNames = Array.from(new Set(activeRaids.map((entry) => entry.raidName)));
+      setActiveRaidNames(currentRaidNames);
+      console.log("[auto-sync] Sync complete, setting lastSyncAt to", stamp);
       setLastSyncAt(new Date());
       setSyncStatus("success");
       if (silent) {
         setSyncMessage(`Auto-sync complete at ${stamp}.`);
       } else {
+        const createdCharacterNames = createdCharacters.map((c) => c.name).sort();
+        const createdText = createdCharacterNames.length
+          ? `Added: ${createdCharacterNames.join(", ")}.`
+          : "";
+
+        const lockedCharacters = new Map();
+        parsed.forEach((entry) => {
+          if (!lockedCharacters.has(entry.characterName)) {
+            lockedCharacters.set(entry.characterName, []);
+          }
+          lockedCharacters.get(entry.characterName).push(entry.raidName);
+        });
+        const lockedText = lockedCharacters.size
+          ? ` Lockouts: ${Array.from(lockedCharacters.entries())
+              .map(([name, raids]) => `${name} (${raids.join(", ")})`)
+              .join("; ")}.`
+          : "";
+
+        const activeCharacters = Array.from(new Set(activeRaids.map((entry) => entry.playerName))).filter(Boolean);
+        const raidActivityText = activeCharacters.length
+          ? ` In raid: ${activeCharacters.join(", ")} (${currentRaidNames.join(", ")}).`
+          : "";
+
         setSyncMessage(
-          `Sync complete. Imported ${parsed.length} saved raid entries and added ${createdCharacters.length} new characters.`
+          `Sync complete. ${createdText}${lockedText}${raidActivityText}`.trim()
         );
       }
-    } catch {
+    } catch (error) {
+      console.error("[auto-sync] Sync error:", error);
       setSyncStatus("error");
       if (!silent) {
         setSyncMessage("Sync failed. Ensure you selected valid NovaInstanceTracker.lua files.");
@@ -414,6 +526,7 @@ function DashboardPage() {
 
     try {
       const handles = await loadConnectedHandles();
+      console.log("[auto-sync] Loaded handles:", handles.length);
       if (!handles.length) {
         if (silent) {
           setSyncStatus("warn");
@@ -425,7 +538,8 @@ function DashboardPage() {
       }
 
       const selectedIndexes = getSelectedConnectedFileIndexes();
-      const meta = getConnectedFileMeta();
+      const meta = readConnectedFileMeta();
+      console.log("[auto-sync] Selected indexes:", selectedIndexes, "Total handles:", handles.length);
       const selectedHandles = selectedIndexes.length
         ? selectedIndexes.map((index) => handles[index]).filter(Boolean)
         : handles;
@@ -441,6 +555,7 @@ function DashboardPage() {
             accountHintName: meta[index]?.accountName || ""
           }));
 
+      console.log("[auto-sync] Selected sources count:", selectedSources.length);
       if (!selectedHandles.length) {
         if (!silent) {
           setSyncStatus("warn");
@@ -458,19 +573,15 @@ function DashboardPage() {
         }
 
         if (permission !== "granted") {
-          if (silent) {
-            return;
-          }
-
-          if (handle.requestPermission) {
+          if (!silent && handle.requestPermission) {
             permission = await handle.requestPermission({ mode: "read" });
           }
         }
 
         if (permission !== "granted") {
+          setSyncStatus("warn");
           if (!silent) {
-            setSyncStatus("warn");
-            setSyncMessage("Permission denied for one or more connected files.");
+            setSyncMessage("Reconnect Nova files in Settings to restore file access.");
           }
           return;
         }
@@ -479,8 +590,10 @@ function DashboardPage() {
         sources.push({ text: await file.text(), accountHintName: source.accountHintName });
       }
 
+      console.log("[auto-sync] About to sync with sources:", sources.length);
       await syncFromLuaTexts(sources, { silent });
-    } catch {
+    } catch (error) {
+      console.error("[auto-sync] Error:", error);
       setSyncStatus("warn");
       if (!silent) {
         setSyncMessage("Could not read selected connected files. Reconnect files in Settings.");
@@ -488,17 +601,47 @@ function DashboardPage() {
     }
   }, [syncFromLuaTexts]);
 
-  useEffect(() => {
-    if (!user || !isAutoSyncEnabled()) {
+  const onReconnectConnectedFile = async (index) => {
+    if (!window.showOpenFilePicker) {
+      setSyncMessage("Your browser does not support direct file connections. Use Settings to reconnect files.");
       return;
     }
 
-    const intervalId = window.setInterval(() => {
-      onSyncFromConnectedFiles(true);
-    }, 5 * 60 * 1000);
+    try {
+      const handles = await window.showOpenFilePicker({
+        multiple: false,
+        types: [
+          {
+            description: "Lua files",
+            accept: {
+              "text/plain": [".lua"]
+            }
+          }
+        ]
+      });
 
-    return () => window.clearInterval(intervalId);
-  }, [onSyncFromConnectedFiles, user]);
+      if (!handles.length) {
+        return;
+      }
+
+      const nextHandles = await loadConnectedHandles();
+      nextHandles[index] = handles[0];
+      const nextMeta = readConnectedFileMeta();
+      nextMeta[index] = {
+        accountName: connectedFiles[index]?.accountName || nextMeta[index]?.accountName || "",
+        fileName: handles[0].name || ""
+      };
+
+      await saveConnectedHandles(nextHandles);
+      saveConnectedFileMeta(nextMeta);
+      setConnectedFiles(
+        buildConnectedFileEntries(nextHandles, nextMeta, getSelectedConnectedFileIndexes())
+      );
+      setSyncMessage(`Reconnected ${handles[0].name || "selected file"}.`);
+    } catch {
+      setSyncMessage("Could not reconnect the file. Try again.");
+    }
+  };
 
   if (!hasFirebaseConfig) {
     return <p className="empty-panel">Add Firebase keys in your .env to enable Auth and data sync.</p>;
@@ -521,6 +664,7 @@ function DashboardPage() {
     setMinLevelFilter("");
     setNeedFilter("needed");
     setAvailabilityFilter("any");
+    setSortBy("raids");
   };
 
   const syncLabel =
@@ -536,9 +680,26 @@ function DashboardPage() {
 
   return (
     <section>
+      {cooldownAlerts.length ? (
+        <div className="cooldown-alert-stack" role="status" aria-live="polite">
+          {cooldownAlerts.map((alert) => (
+            <div key={alert.id} className="cooldown-alert">
+              <span>{alert.text}</span>
+              <button
+                type="button"
+                className="secondary-btn"
+                onClick={() => dismissCooldownAlert(alert.id)}
+              >
+                Dismiss
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="panel-heading">
         <div>
-          <h2>Priority Dashboard</h2>
+          <h2>Raid Dashboard</h2>
           <p>Weekly reset in {formatCountdown(nextReset)}</p>
         </div>
         <div className="row-actions">
@@ -551,6 +712,29 @@ function DashboardPage() {
         </div>
       </div>
       {syncMessage ? <p className="subtitle">{syncMessage}</p> : null}
+      {activeRaidNames.length ? (
+        <p className="subtitle">Live raid activity detected: {activeRaidNames.join(", ")}.</p>
+      ) : null}
+      <div className="panel">
+        <h3>Connected Files</h3>
+        <p className="subtitle">Reconnect any file here instead of going back to Settings.</p>
+        <ul className="simple-list">
+          {connectedFiles.length ? (
+            connectedFiles.map((item, index) => (
+              <li key={item.id}>
+                <span>
+                  {item.fileName || item.name}{item.accountName ? ` (${item.accountName})` : ""}
+                </span>
+                <button type="button" className="secondary-btn" onClick={() => onReconnectConnectedFile(index)}>
+                  Reconnect
+                </button>
+              </li>
+            ))
+          ) : (
+            <li>No connected files yet. Use Settings to connect Nova files first.</li>
+          )}
+        </ul>
+      </div>
 
       <div className="dashboard-filters">
         <input
@@ -558,6 +742,10 @@ function DashboardPage() {
           onChange={(event) => setSearchTerm(event.target.value)}
           placeholder="Search character name"
         />
+        <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+          <option value="raids">Most raids needed</option>
+          <option value="name">Alphabetical</option>
+        </select>
         <select value={needFilter} onChange={(event) => setNeedFilter(event.target.value)}>
           <option value="needed">Needs items only</option>
           <option value="all">Show all visible</option>
@@ -623,7 +811,8 @@ function DashboardPage() {
             <CharacterCard
               key={entry.character.id}
               character={entry.character}
-              metrics={entry.metrics}
+              remainingLootCount={entry.remainingLootCount}
+              lockedRaidCount={entry.lockedRaidCount}
               raidSummary={entry.raidSummary}
               lockedRaidSummary={entry.lockedRaidSummary}
               raidItemsByRaid={entry.raidItemsByRaid}

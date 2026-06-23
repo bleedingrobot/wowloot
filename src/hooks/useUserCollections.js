@@ -4,6 +4,7 @@ import { COLLECTIONS, subscribeUserCollection } from "../services/dataService";
 const DEFAULT = {
   accounts: [],
   characters: [],
+  inventoryItems: [],
   raidStatuses: [],
   lootItems: []
 };
@@ -34,6 +35,9 @@ export function useUserCollections(uid) {
     );
     unsubscribers.push(
       subscribeUserCollection(COLLECTIONS.raidStatuses, uid, (docs) => update("raidStatuses", docs))
+    );
+    unsubscribers.push(
+      subscribeUserCollection(COLLECTIONS.inventoryItems, uid, (docs) => update("inventoryItems", docs))
     );
     unsubscribers.push(
       subscribeUserCollection(COLLECTIONS.lootItems, uid, (docs) => {

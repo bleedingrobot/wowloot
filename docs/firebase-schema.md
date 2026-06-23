@@ -19,6 +19,20 @@
 - `avatarUrl` (string, optional)
 - `createdAt` (ISO string)
 
+### `inventoryItems`
+
+- `userId` (string)
+- `characterName` (string)
+- `realm` (string)
+- `itemId` (number)
+- `itemName` (string)
+- `count` (number)
+- `locationGroup` ("bags" | "bank")
+- `bagKey` (string)
+- `slotIndex` (number)
+- `sourceFileName` (string)
+- `createdAt` (ISO string)
+
 ### `raidStatuses`
 
 - `userId` (string)

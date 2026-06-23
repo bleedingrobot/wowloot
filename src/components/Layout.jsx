@@ -6,11 +6,14 @@ const links = [
   { to: "/characters", label: "Characters" },
   { to: "/raids", label: "Raids" },
   { to: "/loot", label: "Loot" },
+  { to: "/inventory", label: "Inventory" },
+  { to: "/rested", label: "Rested XP" },
   { to: "/settings", label: "Settings" }
 ];
 
 function Layout({ children }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const navLinks = isAdmin ? [...links, { to: "/admin", label: "Admin" }] : links;
 
   return (
     <div className="app-shell">
@@ -23,7 +26,7 @@ function Layout({ children }) {
       </header>
 
       <nav className="nav-bar">
-        {links.map((link) => (
+        {navLinks.map((link) => (
           <NavLink
             key={link.to}
             to={link.to}

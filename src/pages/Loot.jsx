@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
@@ -9,7 +9,6 @@ function LootPage() {
   const { data } = useUserCollections(user?.uid);
   const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
   const visibleCharacters = data.characters.filter((character) => character.showOnDashboard !== false);
-  const visibleCharacterIds = new Set(visibleCharacters.map((character) => character.id));
 
   const [form, setForm] = useState({
     characterId: "",
@@ -18,6 +17,25 @@ function LootPage() {
     priority: "high",
     iconUrl: ""
   });
+
+  const selectedCharacter = visibleCharacters.find((character) => character.id === form.characterId) || null;
+
+  useEffect(() => {
+    if (!visibleCharacters.length) {
+      return;
+    }
+
+    setForm((prev) => {
+      if (prev.characterId && visibleCharacters.some((character) => character.id === prev.characterId)) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        characterId: visibleCharacters[0].id
+      };
+    });
+  }, [visibleCharacters]);
 
   if (!user) {
     return <p className="empty-panel">Sign in to edit loot wishlists.</p>;
@@ -103,37 +121,43 @@ function LootPage() {
 
       <article className="panel">
         <h2>Loot Wishlist</h2>
+        <p className="subtitle">
+          {selectedCharacter
+            ? `Showing wishlist items for ${selectedCharacter.name}.`
+            : "Pick a character to see their wishlist items."}
+        </p>
         <ul className="loot-list">
-          {data.lootItems
-            .filter((item) => visibleCharacterIds.has(item.characterId))
-            .map((item) => {
-            const owner = data.characters.find((character) => character.id === item.characterId);
-            return (
-              <li key={item.id}>
-                <div>
-                  <strong>{item.itemName}</strong>
-                  <p>
-                    {owner?.name || "Unknown"} | {item.raidName} | {item.priority}
-                  </p>
-                </div>
-                <div className="row-actions">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateLootItem(item.id, {
-                        obtained: !item.obtained
-                      })
-                    }
-                  >
-                    {item.obtained ? "Mark Needed" : "Mark Obtained"}
-                  </button>
-                  <button type="button" className="danger" onClick={() => deleteLootItem(item.id)}>
-                    Delete
-                  </button>
-                </div>
-              </li>
-            );
-          })}
+          {selectedCharacter ? (
+            data.lootItems
+              .filter((item) => item.characterId === selectedCharacter.id)
+              .map((item) => (
+                <li key={item.id}>
+                  <div>
+                    <strong>{item.itemName}</strong>
+                    <p>
+                      {selectedCharacter.name} | {item.raidName} | {item.priority}
+                    </p>
+                  </div>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateLootItem(item.id, {
+                          obtained: !item.obtained
+                        })
+                      }
+                    >
+                      {item.obtained ? "Mark Needed" : "Mark Obtained"}
+                    </button>
+                    <button type="button" className="danger" onClick={() => deleteLootItem(item.id)}>
+                      Delete
+                    </button>
+                  </div>
+                </li>
+              ))
+          ) : (
+            <li>No visible character selected yet.</li>
+          )}
         </ul>
       </article>
     </section>
