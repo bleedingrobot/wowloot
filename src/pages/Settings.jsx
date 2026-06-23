@@ -6,6 +6,7 @@ import {
   addAccount,
   addCharacter,
   deleteAllUserData,
+  replaceInventoryItems,
   updateCharacter,
   upsertRaidStatus
 } from "../services/dataService";
@@ -19,6 +20,7 @@ import {
   saveConnectedHandles
 } from "../utils/novaFileConnections";
 import { parseBagnonInventory, summarizeBagnonInventory } from "../utils/bagnonInventoryParser";
+import { parseDataStoreContainers } from "../utils/dataStoreContainersParser";
 import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
@@ -457,7 +459,11 @@ function SettingsPage() {
       const parsedItems = [];
 
       for (const source of sources) {
-        parsedItems.push(...parseBagnonInventory(source.text, source.fileName, source.accountHintName));
+        if (String(source.text || "").includes("DataStore_ContainersDB")) {
+          parsedItems.push(...parseDataStoreContainers(source.text, source.fileName || ""));
+        } else {
+          parsedItems.push(...parseBagnonInventory(source.text, source.fileName, source.accountHintName));
+        }
       }
 
       await replaceInventoryItems(user.uid, parsedItems);

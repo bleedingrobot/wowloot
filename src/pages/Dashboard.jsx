@@ -15,6 +15,7 @@ import {
   saveConnectedHandles
 } from "../utils/novaFileConnections";
 import { parseBagnonInventory } from "../utils/bagnonInventoryParser";
+import { parseDataStoreContainers } from "../utils/dataStoreContainersParser";
 import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
@@ -562,7 +563,11 @@ function DashboardPage() {
 
     const parsedItems = [];
     for (const source of luaTexts) {
-      parsedItems.push(...parseBagnonInventory(source.text, source.fileName, source.accountHintName));
+      if (String(source.text || "").includes("DataStore_ContainersDB")) {
+        parsedItems.push(...parseDataStoreContainers(source.text, source.fileName || ""));
+      } else {
+        parsedItems.push(...parseBagnonInventory(source.text, source.fileName, source.accountHintName));
+      }
     }
 
     if (!parsedItems.length) {
