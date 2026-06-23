@@ -17,7 +17,7 @@ function parseCharacterKey(key) {
 }
 
 function parseItemLink(link) {
-  const match = String(link || "").match(/\|Hitem:(\d+):.*?\|h\[(.*?)\]\|h\|r/);
+  const match = String(link || "").match(/\|Hitem:(\d+):.*?\|h\[(.*?)\]\|h(?:\|r)?/);
   if (!match) {
     return { itemId: null, itemName: "" };
   }
@@ -60,6 +60,34 @@ function parseArrayLine(line, values) {
   }
 
   values.push(parseLuaValue(trimmed));
+}
+
+function backfillUnknownItemNames(items) {
+  const nameById = new Map();
+
+  items.forEach((item) => {
+    if (Number.isFinite(item.itemId) && item.itemName && item.itemName !== "Unknown item") {
+      if (!nameById.has(item.itemId)) {
+        nameById.set(item.itemId, item.itemName);
+      }
+    }
+  });
+
+  return items.map((item) => {
+    if (item.itemName !== "Unknown item") {
+      return item;
+    }
+
+    const resolvedName = nameById.get(item.itemId);
+    if (!resolvedName) {
+      return item;
+    }
+
+    return {
+      ...item,
+      itemName: resolvedName
+    };
+  });
 }
 
 export function parseDataStoreContainers(luaText, fileName = "") {
@@ -198,7 +226,7 @@ export function parseDataStoreContainers(luaText, fileName = "") {
     }
   });
 
-  return items;
+  return backfillUnknownItemNames(items);
 }
 
 export function summarizeInventoryItems(items, characters = [], accounts = []) {
