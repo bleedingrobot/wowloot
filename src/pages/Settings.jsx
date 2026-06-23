@@ -560,10 +560,8 @@ function SettingsPage() {
       }
 
       setPendingBagnonConnectHandles(handles);
-      setPendingBagnonAccountName(
-        getUniqueAccountHint(bagnonPaths) || getFileLabelHint(bagnonConnectedFiles.map((item) => item.fileName))
-      );
-      setBagnonSyncMessage("Set account name for selected files, then confirm.");
+      setPendingBagnonAccountName("");
+      setBagnonSyncMessage("Select an account for the new files, then confirm.");
     } catch {
       // User cancelled picker.
     }
@@ -884,11 +882,17 @@ function SettingsPage() {
                 <p className="subtitle">
                   {pendingConnectHandles.length} selected file(s) awaiting confirmation.
                 </p>
-                <input
+                <select
                   value={pendingAccountName}
                   onChange={(event) => setPendingAccountName(event.target.value)}
-                  placeholder="Account name (example: JAMESRILEY)"
-                />
+                >
+                  <option value="">No account</option>
+                  {data.accounts.map((account) => (
+                    <option key={account.id} value={account.battleNetId}>
+                      {account.battleNetId}
+                    </option>
+                  ))}
+                </select>
                 <div className="row-actions">
                   <button type="button" onClick={onConfirmPendingConnect}>
                     Confirm Connection
@@ -957,11 +961,17 @@ function SettingsPage() {
                 <p className="subtitle">
                   {pendingBagnonConnectHandles.length} selected file(s) awaiting confirmation.
                 </p>
-                <input
+                <select
                   value={pendingBagnonAccountName}
                   onChange={(event) => setPendingBagnonAccountName(event.target.value)}
-                  placeholder="Account or folder label"
-                />
+                >
+                  <option value="">No account</option>
+                  {data.accounts.map((account) => (
+                    <option key={account.id} value={account.battleNetId}>
+                      {account.battleNetId}
+                    </option>
+                  ))}
+                </select>
                 <div className="row-actions">
                   <button type="button" onClick={onConfirmPendingBagnonConnect}>
                     Confirm Connection
