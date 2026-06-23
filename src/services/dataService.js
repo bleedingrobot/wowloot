@@ -19,7 +19,8 @@ const COLLECTIONS = {
   accounts: "accounts",
   characters: "characters",
   raidStatuses: "raidStatuses",
-  lootItems: "lootItems"
+  lootItems: "lootItems",
+  shoppingProfiles: "shoppingProfiles"
 };
 
 export function subscribeUserCollection(collectionName, uid, callback) {
@@ -97,6 +98,22 @@ export function updateLootItem(lootId, payload) {
 
 export function deleteLootItem(lootId) {
   return deleteDoc(doc(db, COLLECTIONS.lootItems, lootId));
+}
+
+export function addShoppingProfile(uid, payload) {
+  return addDoc(collection(db, COLLECTIONS.shoppingProfiles), {
+    userId: uid,
+    ...payload,
+    createdAt: new Date().toISOString()
+  });
+}
+
+export function updateShoppingProfile(profileId, payload) {
+  return updateDoc(doc(db, COLLECTIONS.shoppingProfiles, profileId), payload);
+}
+
+export function deleteShoppingProfile(profileId) {
+  return deleteDoc(doc(db, COLLECTIONS.shoppingProfiles, profileId));
 }
 
 export async function replaceInventoryItems(_uid, items) {

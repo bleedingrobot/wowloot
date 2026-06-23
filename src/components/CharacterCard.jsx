@@ -7,7 +7,8 @@ function CharacterCard({
   raidSummary,
   lockedRaidSummary,
   raidItemsByRaid,
-  classIcon
+  classIcon,
+  shoppingNeeds
 }) {
 
   return (
@@ -56,6 +57,22 @@ function CharacterCard({
           <p className="raid-item-empty">No wishlist items in currently available raids.</p>
         )}
       </section>
+
+      {shoppingNeeds?.length ? (
+        <section>
+          <p className="summary-title shopping-needs-title">Shopping List</p>
+          <ul className="raid-item-list shopping-needs-list">
+            {shoppingNeeds.map((need) => (
+              <li key={need.itemName} className="shopping-need-row">
+                <span>{need.itemName}</span>
+                <span className="shopping-need-badge">
+                  {need.have}/{need.required}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </article>
   );
 }

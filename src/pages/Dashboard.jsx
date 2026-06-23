@@ -7,6 +7,8 @@ import { getNextRaidReset, formatCountdown, isRaidLocked } from "../utils/raidRe
 import { getClassIcon } from "../utils/classIcons";
 import { addAccount, addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
 import { parseNovaActiveInstances, parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import { useInventory } from "../hooks/useInventory";
+import { computeShoppingNeeds } from "../utils/shoppingList";
 import {
   buildConnectedFileEntries,
   loadConnectedHandles,
@@ -89,6 +91,7 @@ function getSelectedBagnonConnectedFileIndexes() {
 function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
+  const inventoryItems = useInventory();
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState("idle");
@@ -308,7 +311,8 @@ function DashboardPage() {
         raidSummary: raidNeedsSummary,
         lockedRaidSummary,
         raidItemsByRaid,
-        classIcon: getClassIcon(character.class)
+        classIcon: getClassIcon(character.class),
+        shoppingNeeds: computeShoppingNeeds(character, data.shoppingProfiles, inventoryItems)
       };
     });
 
@@ -356,6 +360,8 @@ function DashboardPage() {
     visibleCharacters,
     data.lootItems,
     data.raidStatuses,
+    data.shoppingProfiles,
+    inventoryItems,
     needFilter,
     availabilityFilter,
     classFilter,
@@ -901,6 +907,7 @@ function DashboardPage() {
               lockedRaidSummary={entry.lockedRaidSummary}
               raidItemsByRaid={entry.raidItemsByRaid}
               classIcon={entry.classIcon}
+              shoppingNeeds={entry.shoppingNeeds}
             />
           ))}
         </div>
