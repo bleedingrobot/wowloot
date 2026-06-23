@@ -11,7 +11,27 @@ service cloud.firestore {
       return request.auth != null && request.auth.uid == uid;
     }
 
-    match /{collection}/{docId} {
+    match /accounts/{docId} {
+      allow create: if isAdmin() || isOwner(request.resource.data.userId);
+      allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    match /characters/{docId} {
+      allow create: if isAdmin() || isOwner(request.resource.data.userId);
+      allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    match /raidStatuses/{docId} {
+      allow create: if isAdmin() || isOwner(request.resource.data.userId);
+      allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    match /lootItems/{docId} {
+      allow create: if isAdmin() || isOwner(request.resource.data.userId);
+      allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
+    match /inventoryItems/{docId} {
       allow create: if isAdmin() || isOwner(request.resource.data.userId);
       allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
     }
