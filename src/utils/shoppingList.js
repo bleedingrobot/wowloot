@@ -2,6 +2,31 @@ function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeItemKey(value) {
+  return normalize(value)
+    .replace(/[’']/g, "")
+    .replace(/\s+/g, " ");
+}
+
+function isCharacterMatch(inventoryItem, character) {
+  const itemName = normalize(inventoryItem.characterName);
+  const charName = normalize(character.name);
+  if (!itemName || !charName || itemName !== charName) {
+    return false;
+  }
+
+  const itemRealm = normalize(inventoryItem.realm);
+  const charRealm = normalize(character.realm);
+
+  // Some imports (especially Bagnon-style) may not include realm details.
+  // If either side is blank, fall back to character-name matching.
+  if (!itemRealm || !charRealm) {
+    return true;
+  }
+
+  return itemRealm === charRealm;
+}
+
 export function computeShoppingNeeds(character, profiles, inventoryItems) {
   const matchingProfiles = profiles.filter(
     (profile) => normalize(profile.className) === normalize(character.class) || profile.className === "All"
@@ -15,7 +40,7 @@ export function computeShoppingNeeds(character, profiles, inventoryItems) {
   const required = new Map();
   matchingProfiles.forEach((profile) => {
     (profile.items || []).forEach((item) => {
-      const key = normalize(item.itemName);
+      const key = normalizeItemKey(item.itemName);
       if (!key) {
         return;
       }
@@ -33,13 +58,9 @@ export function computeShoppingNeeds(character, profiles, inventoryItems) {
   // Sum what this character actually has across all bags and bank
   const haveCounts = new Map();
   inventoryItems
-    .filter(
-      (item) =>
-        normalize(item.characterName) === normalize(character.name) &&
-        normalize(item.realm) === normalize(character.realm)
-    )
+    .filter((item) => isCharacterMatch(item, character))
     .forEach((item) => {
-      const key = normalize(item.itemName);
+      const key = normalizeItemKey(item.itemName);
       haveCounts.set(key, (haveCounts.get(key) || 0) + (item.count || 1));
     });
 
