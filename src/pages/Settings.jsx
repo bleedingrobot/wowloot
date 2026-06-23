@@ -473,6 +473,69 @@ function SettingsPage() {
     }
   };
 
+  const loadSelectedNovaSources = async () => {
+    const handles = await loadConnectedHandles();
+    const selectedIndexes = readSelectedFileIndexes();
+    const meta = readConnectedFileMeta();
+    const selectedHandles = selectedIndexes.length
+      ? selectedIndexes.map((index) => handles[index]).filter(Boolean)
+      : handles;
+
+    const sources = [];
+    for (const [index, handle] of selectedHandles.entries()) {
+      let permission = "granted";
+      if (handle.queryPermission) {
+        permission = await handle.queryPermission({ mode: "read" });
+      }
+      if (permission !== "granted") {
+        permission = await handle.requestPermission({ mode: "read" });
+      }
+      if (permission !== "granted") {
+        throw new Error("permission-denied");
+      }
+
+      const file = await handle.getFile();
+      sources.push({
+        text: await file.text(),
+        accountHintName: selectedIndexes.length ? meta[selectedIndexes[index]]?.accountName || "" : meta[index]?.accountName || ""
+      });
+    }
+
+    return sources;
+  };
+
+  const loadSelectedBagnonSources = async () => {
+    const handles = await loadBagnonConnectedHandles();
+    const selectedIndexes = readBagnonSelectedFileIndexes();
+    const meta = readBagnonConnectedFileMeta();
+    const selectedHandles = selectedIndexes.length
+      ? selectedIndexes.map((index) => handles[index]).filter(Boolean)
+      : handles;
+
+    const sources = [];
+    for (const [index, handle] of selectedHandles.entries()) {
+      let permission = "granted";
+      if (handle.queryPermission) {
+        permission = await handle.queryPermission({ mode: "read" });
+      }
+      if (permission !== "granted") {
+        permission = await handle.requestPermission({ mode: "read" });
+      }
+      if (permission !== "granted") {
+        throw new Error("permission-denied");
+      }
+
+      const file = await handle.getFile();
+      sources.push({
+        text: await file.text(),
+        accountHintName: selectedIndexes.length ? meta[selectedIndexes[index]]?.accountName || "" : meta[index]?.accountName || "",
+        fileName: file.name
+      });
+    }
+
+    return sources;
+  };
+
   const onConnectBagnonFiles = async () => {
     if (!window.showOpenFilePicker) {
       setBagnonSyncMessage("Your browser does not support direct file connections. Use Update and pick files.");
@@ -587,40 +650,7 @@ function SettingsPage() {
 
   const onUpdateFromBagnonConnectedFiles = async (silent = false) => {
     try {
-      const selectedSources = bagnonConnectedFiles
-        .filter((item) => item.selected)
-        .map((item) => ({ handle: item.handle, accountHintName: item.accountName, fileName: item.fileName }));
-
-      if (!selectedSources.length) {
-        if (!silent) {
-          setBagnonSyncMessage("Select at least one connected Bagnon file to sync.");
-        }
-        return;
-      }
-
-      const sources = [];
-      for (const source of selectedSources) {
-        const handle = source.handle;
-        let permission = "granted";
-        if (handle.queryPermission) {
-          permission = await handle.queryPermission({ mode: "read" });
-        }
-        if (permission !== "granted") {
-          permission = await handle.requestPermission({ mode: "read" });
-        }
-        if (permission !== "granted") {
-          throw new Error("permission-denied");
-        }
-
-        const file = await handle.getFile();
-        sources.push({
-          text: await file.text(),
-          accountHintName: source.accountHintName,
-          fileName: source.fileName || file.name
-        });
-      }
-
-      await syncBagnonFromLuaTexts(sources);
+      await onUpdateFromConnectedFiles(silent);
     } catch {
       if (!silent) {
         setBagnonSyncMessage("Could not read selected connected files. Reconnect files and try again.");
@@ -695,39 +725,25 @@ function SettingsPage() {
 
   const onUpdateFromConnectedFiles = async (silent = false) => {
     try {
-      const selectedSources = connectedFiles
-        .filter((item) => item.selected)
-        .map((item) => ({ handle: item.handle, accountHintName: item.accountName }));
+      const [novaSources, bagnonSources] = await Promise.all([
+        loadSelectedNovaSources(),
+        loadSelectedBagnonSources()
+      ]);
 
-      if (!selectedSources.length) {
+      if (!novaSources.length && !bagnonSources.length) {
         if (!silent) {
-          setSyncMessage("Select at least one connected Nova file to sync.");
+          setSyncMessage("Select at least one connected file to sync.");
         }
         return;
       }
 
-      const sources = [];
-      for (const source of selectedSources) {
-        const handle = source.handle;
-        let permission = "granted";
-        if (handle.queryPermission) {
-          permission = await handle.queryPermission({ mode: "read" });
-        }
-        if (permission !== "granted") {
-          permission = await handle.requestPermission({ mode: "read" });
-        }
-        if (permission !== "granted") {
-          throw new Error("permission-denied");
-        }
-
-        const file = await handle.getFile();
-        sources.push({
-          text: await file.text(),
-          accountHintName: source.accountHintName
-        });
+      if (novaSources.length) {
+        await syncFromLuaTexts(novaSources);
       }
 
-      await syncFromLuaTexts(sources);
+      if (bagnonSources.length) {
+        await syncBagnonFromLuaTexts(bagnonSources);
+      }
     } catch {
       if (!silent) {
         setSyncMessage("Could not read selected connected files. Reconnect files and try again.");
@@ -826,7 +842,7 @@ function SettingsPage() {
                 Connect Nova
               </button>
               <button type="button" onClick={onUpdateFromConnectedFiles} disabled={isSyncing}>
-                {isSyncing ? "Syncing..." : "Sync Selected"}
+                {isSyncing ? "Syncing..." : "Sync Connected Files"}
               </button>
             </div>
             <h4>Connected Files</h4>
@@ -895,7 +911,7 @@ function SettingsPage() {
                 Connect Bagnon
               </button>
               <button type="button" onClick={onUpdateFromBagnonConnectedFiles} disabled={isBagnonSyncing}>
-                {isBagnonSyncing ? "Syncing..." : "Sync Selected"}
+                {isBagnonSyncing ? "Syncing..." : "Sync Connected Files"}
               </button>
             </div>
             <h4>Connected Files</h4>

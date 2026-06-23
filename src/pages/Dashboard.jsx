@@ -14,9 +14,19 @@ import {
   saveConnectedFileMeta,
   saveConnectedHandles
 } from "../utils/novaFileConnections";
+import { parseBagnonInventory } from "../utils/bagnonInventoryParser";
+import {
+  buildConnectedFileEntries as buildBagnonConnectedFileEntries,
+  loadConnectedHandles as loadBagnonConnectedHandles,
+  readConnectedFileMeta as readBagnonConnectedFileMeta,
+  saveConnectedFileMeta as saveBagnonConnectedFileMeta,
+  saveConnectedHandles as saveBagnonConnectedHandles
+} from "../utils/bagnonFileConnections";
+import { replaceInventoryItems } from "../services/dataService";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
+const BAGNON_SELECTED_FILE_INDEXES_KEY = "bagnon_selected_file_indexes";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -62,6 +72,19 @@ function getSelectedConnectedFileIndexes() {
   }
 }
 
+function getSelectedBagnonConnectedFileIndexes() {
+  try {
+    const raw = localStorage.getItem(BAGNON_SELECTED_FILE_INDEXES_KEY);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value) => Number.isInteger(value) && value >= 0) : [];
+  } catch {
+    return [];
+  }
+}
+
 function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
@@ -71,6 +94,7 @@ function DashboardPage() {
   const [lastSyncAt, setLastSyncAt] = useState(null);
   const [activeRaidNames, setActiveRaidNames] = useState([]);
   const [connectedFiles, setConnectedFiles] = useState([]);
+  const [bagnonConnectedFiles, setBagnonConnectedFiles] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [classFilter, setClassFilter] = useState("all");
   const [factionFilter, setFactionFilter] = useState("all");
@@ -144,6 +168,22 @@ function DashboardPage() {
   useEffect(() => {
     hydrateConnectedFiles();
   }, [hydrateConnectedFiles]);
+
+  const hydrateBagnonConnectedFiles = useCallback(() => {
+    loadBagnonConnectedHandles()
+      .then((handles) => {
+        const selectedIndexes = getSelectedBagnonConnectedFileIndexes();
+        const meta = readBagnonConnectedFileMeta();
+        setBagnonConnectedFiles(buildBagnonConnectedFileEntries(handles, meta, selectedIndexes));
+      })
+      .catch(() => {
+        setBagnonConnectedFiles([]);
+      });
+  }, []);
+
+  useEffect(() => {
+    hydrateBagnonConnectedFiles();
+  }, [hydrateBagnonConnectedFiles]);
 
   const collectLockedRaids = useCallback(() => {
     const now = new Date();
@@ -515,6 +555,26 @@ function DashboardPage() {
     }
   }, [data.accounts, data.characters, user]);
 
+  const syncBagnonFromLuaTexts = useCallback(async (luaTexts, { silent = false } = {}) => {
+    if (!user) {
+      return;
+    }
+
+    const parsedItems = [];
+    for (const source of luaTexts) {
+      parsedItems.push(...parseBagnonInventory(source.text, source.fileName, source.accountHintName));
+    }
+
+    if (!parsedItems.length) {
+      if (!silent) {
+        setSyncMessage("No inventory items were found in the selected Bagnon files.");
+      }
+      return;
+    }
+
+    await replaceInventoryItems(user.uid, parsedItems);
+  }, [user]);
+
   const onSyncFromConnectedFiles = useCallback(async (silent = false) => {
     if (!window.indexedDB) {
       setSyncStatus("warn");
@@ -525,59 +585,25 @@ function DashboardPage() {
     }
 
     try {
-      const handles = await loadConnectedHandles();
-      console.log("[auto-sync] Loaded handles:", handles.length);
-      if (!handles.length) {
-        if (silent) {
-          setSyncStatus("warn");
-        }
-        if (!silent) {
-          setSyncMessage("No connected Nova files yet. Connect files in Settings.");
-        }
-        return;
-      }
+      const [novaHandles, bagnonHandles] = await Promise.all([
+        loadConnectedHandles(),
+        loadBagnonConnectedHandles()
+      ]);
 
-      const selectedIndexes = getSelectedConnectedFileIndexes();
-      const meta = readConnectedFileMeta();
-      console.log("[auto-sync] Selected indexes:", selectedIndexes, "Total handles:", handles.length);
-      const selectedHandles = selectedIndexes.length
-        ? selectedIndexes.map((index) => handles[index]).filter(Boolean)
-        : handles;
-      const selectedSources = selectedIndexes.length
-        ? selectedIndexes
-            .map((index) => ({
-              handle: handles[index],
-              accountHintName: meta[index]?.accountName || ""
-            }))
-            .filter((entry) => entry.handle)
-        : handles.map((handle, index) => ({
-            handle,
-            accountHintName: meta[index]?.accountName || ""
-          }));
-
-      console.log("[auto-sync] Selected sources count:", selectedSources.length);
-      if (!selectedHandles.length) {
-        if (!silent) {
-          setSyncStatus("warn");
-          setSyncMessage("No files selected for sync. Select files in Settings.");
-        }
-        return;
-      }
-
-      const sources = [];
-      for (const source of selectedSources) {
-        const handle = source.handle;
+      const novaSelectedIndexes = getSelectedConnectedFileIndexes();
+      const novaMeta = readConnectedFileMeta();
+      const novaSelectedHandles = novaSelectedIndexes.length
+        ? novaSelectedIndexes.map((index) => novaHandles[index]).filter(Boolean)
+        : novaHandles;
+      const novaSources = [];
+      for (const [index, handle] of novaSelectedHandles.entries()) {
         let permission = "granted";
         if (handle.queryPermission) {
           permission = await handle.queryPermission({ mode: "read" });
         }
-
         if (permission !== "granted") {
-          if (!silent && handle.requestPermission) {
-            permission = await handle.requestPermission({ mode: "read" });
-          }
+          permission = await handle.requestPermission({ mode: "read" });
         }
-
         if (permission !== "granted") {
           setSyncStatus("warn");
           if (!silent) {
@@ -587,11 +613,64 @@ function DashboardPage() {
         }
 
         const file = await handle.getFile();
-        sources.push({ text: await file.text(), accountHintName: source.accountHintName });
+        novaSources.push({
+          text: await file.text(),
+          accountHintName: novaSelectedIndexes.length ? novaMeta[novaSelectedIndexes[index]]?.accountName || "" : novaMeta[index]?.accountName || ""
+        });
       }
 
-      console.log("[auto-sync] About to sync with sources:", sources.length);
-      await syncFromLuaTexts(sources, { silent });
+      const bagnonSelectedIndexes = getSelectedBagnonConnectedFileIndexes();
+      const bagnonMeta = readBagnonConnectedFileMeta();
+      const bagnonSelectedHandles = bagnonSelectedIndexes.length
+        ? bagnonSelectedIndexes.map((index) => bagnonHandles[index]).filter(Boolean)
+        : bagnonHandles;
+      const bagnonSources = [];
+      for (const [index, handle] of bagnonSelectedHandles.entries()) {
+        let permission = "granted";
+        if (handle.queryPermission) {
+          permission = await handle.queryPermission({ mode: "read" });
+        }
+        if (permission !== "granted") {
+          permission = await handle.requestPermission({ mode: "read" });
+        }
+        if (permission !== "granted") {
+          setSyncStatus("warn");
+          if (!silent) {
+            setSyncMessage("Reconnect Bagnon files in Settings to restore file access.");
+          }
+          return;
+        }
+
+        const file = await handle.getFile();
+        bagnonSources.push({
+          text: await file.text(),
+          accountHintName: bagnonSelectedIndexes.length ? bagnonMeta[bagnonSelectedIndexes[index]]?.accountName || "" : bagnonMeta[index]?.accountName || "",
+          fileName: file.name
+        });
+      }
+
+      if (!novaSources.length && !bagnonSources.length) {
+        if (!silent) {
+          setSyncStatus("warn");
+          setSyncMessage("No files selected for sync. Select files in Settings.");
+        }
+        return;
+      }
+
+      if (novaSources.length) {
+        await syncFromLuaTexts(novaSources, { silent });
+      }
+
+      if (bagnonSources.length) {
+        await syncBagnonFromLuaTexts(bagnonSources, { silent });
+      }
+
+      if (!silent) {
+        setSyncMessage(
+          `Sync complete. Processed ${novaSources.length} Nova file(s) and ${bagnonSources.length} Bagnon file(s).`
+        );
+      }
+      setSyncStatus("success");
     } catch (error) {
       console.error("[auto-sync] Error:", error);
       setSyncStatus("warn");
@@ -707,7 +786,7 @@ function DashboardPage() {
             Sync: {syncLabel} | Last: {lastSyncAt ? lastSyncAt.toLocaleTimeString() : "Never"}
           </span>
           <button type="button" onClick={() => onSyncFromConnectedFiles()} disabled={isSyncing}>
-            {isSyncing ? "Syncing..." : "Sync from Nova"}
+            {isSyncing ? "Syncing..." : "Sync Connected Files"}
           </button>
         </div>
       </div>
