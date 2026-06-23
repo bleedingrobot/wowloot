@@ -79,6 +79,7 @@ function SettingsPage() {
   const [bagnonConnectedFiles, setBagnonConnectedFiles] = useState([]);
   const [pendingBagnonConnectHandles, setPendingBagnonConnectHandles] = useState([]);
   const [pendingBagnonAccountName, setPendingBagnonAccountName] = useState("");
+  const [isClearingInventory, setIsClearingInventory] = useState(false);
   const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
 
   const readSelectedFileIndexes = () => {
@@ -674,6 +675,22 @@ function SettingsPage() {
     });
   };
 
+  const onClearBagnonInventory = async () => {
+    if (!window.confirm("Clear all local inventory data? You can re-sync at any time to reload from file.")) {
+      return;
+    }
+
+    setIsClearingInventory(true);
+    try {
+      await clearInventoryItems();
+      setBagnonSyncMessage("Inventory data cleared.");
+    } catch {
+      setBagnonSyncMessage("Could not clear inventory data. Try again.");
+    } finally {
+      setIsClearingInventory(false);
+    }
+  };
+
   const onRemoveBagnonConnectedFile = async (id) => {
     const next = bagnonConnectedFiles.filter((item) => item.id !== id);
     setBagnonConnectedFiles(next);
@@ -924,6 +941,9 @@ function SettingsPage() {
               </button>
               <button type="button" onClick={onUpdateFromBagnonConnectedFiles} disabled={isBagnonSyncing}>
                 {isBagnonSyncing ? "Syncing..." : "Sync Connected Files"}
+              </button>
+              <button type="button" className="danger" onClick={onClearBagnonInventory} disabled={isClearingInventory || isBagnonSyncing}>
+                {isClearingInventory ? "Clearing..." : "Clear Inventory Data"}
               </button>
             </div>
             <h4>Connected Files</h4>

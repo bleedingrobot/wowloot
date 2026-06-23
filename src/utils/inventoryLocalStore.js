@@ -1,6 +1,7 @@
 const INVENTORY_DB = "wowloot-inventory";
 const INVENTORY_STORE = "items";
 const INVENTORY_KEY = "inventory-items";
+const INVENTORY_META_KEY = "inventory-meta";
 
 function openDb() {
   return new Promise((resolve, reject) => {
@@ -23,6 +24,10 @@ export async function saveInventoryItems(items) {
   await new Promise((resolve, reject) => {
     const tx = db.transaction(INVENTORY_STORE, "readwrite");
     tx.objectStore(INVENTORY_STORE).put(items, INVENTORY_KEY);
+    tx.objectStore(INVENTORY_STORE).put(
+      { syncedAt: new Date().toISOString(), count: items.length },
+      INVENTORY_META_KEY
+    );
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
@@ -54,10 +59,27 @@ export async function clearInventoryItems() {
   await new Promise((resolve, reject) => {
     const tx = db.transaction(INVENTORY_STORE, "readwrite");
     tx.objectStore(INVENTORY_STORE).delete(INVENTORY_KEY);
+    tx.objectStore(INVENTORY_STORE).delete(INVENTORY_META_KEY);
     tx.oncomplete = resolve;
     tx.onerror = () => reject(tx.error);
   });
   db.close();
+}
+
+export async function loadInventoryMeta() {
+  if (!window.indexedDB) {
+    return null;
+  }
+
+  const db = await openDb();
+  const meta = await new Promise((resolve, reject) => {
+    const tx = db.transaction(INVENTORY_STORE, "readonly");
+    const req = tx.objectStore(INVENTORY_STORE).get(INVENTORY_META_KEY);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+  db.close();
+  return meta;
 }
 
 export const INVENTORY_UPDATED_EVENT = "wowloot-inventory-updated";

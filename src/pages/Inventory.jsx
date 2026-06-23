@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useUserCollections } from "../hooks/useUserCollections";
 import { replaceInventoryItems } from "../services/dataService";
 import { parseDataStoreContainers, summarizeInventoryItems } from "../utils/dataStoreContainersParser";
-import { INVENTORY_UPDATED_EVENT, loadInventoryItems } from "../utils/inventoryLocalStore";
+import { INVENTORY_UPDATED_EVENT, clearInventoryItems, loadInventoryItems, loadInventoryMeta } from "../utils/inventoryLocalStore";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -18,12 +18,15 @@ function InventoryPage() {
   const { data } = useUserCollections(user?.uid);
   const fileInputRef = useRef(null);
   const [inventoryItems, setInventoryItems] = useState([]);
+  const [syncMeta, setSyncMeta] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [isImporting, setIsImporting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   const refreshInventory = useCallback(() => {
     loadInventoryItems().then(setInventoryItems).catch(() => setInventoryItems([]));
+    loadInventoryMeta().then(setSyncMeta).catch(() => setSyncMeta(null));
   }, []);
 
   useEffect(() => {
@@ -58,6 +61,22 @@ function InventoryPage() {
   if (!user) {
     return <p className="empty-panel">Sign in to upload container files and search inventory.</p>;
   }
+
+  const onClearInventory = async () => {
+    if (!window.confirm("Clear all local inventory data? Sync again to reload from file.")) {
+      return;
+    }
+
+    setIsClearing(true);
+    try {
+      await clearInventoryItems();
+      setInventoryItems([]);
+      setSyncMeta(null);
+      setImportMessage("Inventory cleared.");
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const onPickFiles = () => {
     fileInputRef.current?.click();
@@ -117,6 +136,9 @@ function InventoryPage() {
           <button type="button" onClick={onPickFiles} disabled={isImporting}>
             {isImporting ? "Importing..." : "Upload Container Files"}
           </button>
+          <button type="button" className="danger" onClick={onClearInventory} disabled={isClearing || isImporting}>
+            {isClearing ? "Clearing..." : "Clear Inventory"}
+          </button>
           <input
             ref={fileInputRef}
             className="hidden-input"
@@ -138,6 +160,11 @@ function InventoryPage() {
           </div>
         </div>
 
+        {syncMeta ? (
+          <p className="subtitle">
+            Last synced: {new Date(syncMeta.syncedAt).toLocaleString()} &mdash; {syncMeta.count} stacks written
+          </p>
+        ) : null}
         {importMessage ? <p className="subtitle">{importMessage}</p> : null}
       </article>
 
