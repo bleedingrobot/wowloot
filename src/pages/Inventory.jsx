@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useUserCollections } from "../hooks/useUserCollections";
 import { replaceInventoryItems } from "../services/dataService";
 import { parseDataStoreContainers, summarizeInventoryItems } from "../utils/dataStoreContainersParser";
+import { INVENTORY_UPDATED_EVENT, loadInventoryItems } from "../utils/inventoryLocalStore";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -16,13 +17,27 @@ function InventoryPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
   const fileInputRef = useRef(null);
+  const [inventoryItems, setInventoryItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [importMessage, setImportMessage] = useState("");
   const [isImporting, setIsImporting] = useState(false);
 
+  const refreshInventory = useCallback(() => {
+    loadInventoryItems().then(setInventoryItems).catch(() => setInventoryItems([]));
+  }, []);
+
+  useEffect(() => {
+    refreshInventory();
+  }, [refreshInventory]);
+
+  useEffect(() => {
+    window.addEventListener(INVENTORY_UPDATED_EVENT, refreshInventory);
+    return () => window.removeEventListener(INVENTORY_UPDATED_EVENT, refreshInventory);
+  }, [refreshInventory]);
+
   const searchResults = useMemo(() => {
     const query = normalize(searchTerm);
-    const grouped = summarizeInventoryItems(data.inventoryItems, data.characters, data.accounts);
+    const grouped = summarizeInventoryItems(inventoryItems, data.characters, data.accounts);
 
     if (!query) {
       return grouped.slice(0, 12);
@@ -31,14 +46,14 @@ function InventoryPage() {
     return grouped.filter((group) => {
       return normalize(group.itemName).includes(query) || String(group.itemId || "") === query;
     });
-  }, [data.accounts, data.characters, data.inventoryItems, searchTerm]);
+  }, [data.accounts, data.characters, inventoryItems, searchTerm]);
 
   const totalOwners = useMemo(() => {
-    const keys = new Set(data.inventoryItems.map((item) => characterKey(item.characterName, item.realm)));
+    const keys = new Set(inventoryItems.map((item) => characterKey(item.characterName, item.realm)));
     return keys.size;
-  }, [data.inventoryItems]);
+  }, [inventoryItems]);
 
-  const totalStacks = data.inventoryItems.length;
+  const totalStacks = inventoryItems.length;
 
   if (!user) {
     return <p className="empty-panel">Sign in to upload container files and search inventory.</p>;

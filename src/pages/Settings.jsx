@@ -21,6 +21,7 @@ import {
 } from "../utils/novaFileConnections";
 import { parseBagnonInventory, summarizeBagnonInventory } from "../utils/bagnonInventoryParser";
 import { parseDataStoreContainers } from "../utils/dataStoreContainersParser";
+import { clearInventoryItems } from "../utils/inventoryLocalStore";
 import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
@@ -805,6 +806,7 @@ function SettingsPage() {
     setSyncMessage("Deleting all data...");
     try {
       await deleteAllUserData(user.uid);
+      await clearInventoryItems();
       localStorage.removeItem(NIT_PATHS_KEY);
       localStorage.removeItem(BAGNON_PATHS_KEY);
       await saveConnectedHandles([]);

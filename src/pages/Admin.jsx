@@ -19,7 +19,6 @@ function AdminPage() {
   const { user, isAdmin, hasFirebaseConfig } = useAuth();
   const [accounts, setAccounts] = useState([]);
   const [characters, setCharacters] = useState([]);
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [lootItems, setLootItems] = useState([]);
   const [raidStatuses, setRaidStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -43,11 +42,6 @@ function AdminPage() {
     unsubscribers.push(
       subscribeAllCollection(COLLECTIONS.characters, (docs) => {
         setCharacters(docs);
-      })
-    );
-    unsubscribers.push(
-      subscribeAllCollection(COLLECTIONS.inventoryItems, (docs) => {
-        setInventoryItems(docs);
       })
     );
     unsubscribers.push(
@@ -80,7 +74,6 @@ function AdminPage() {
           uid,
           accounts: 0,
           characters: 0,
-          inventoryItems: 0,
           lootItems: 0,
           raidStatuses: 0,
           accountHints: new Set()
@@ -98,7 +91,6 @@ function AdminPage() {
       }
     });
     characters.forEach((item) => addCount(item.userId, "characters"));
-    inventoryItems.forEach((item) => addCount(item.userId, "inventoryItems"));
     lootItems.forEach((item) => addCount(item.userId, "lootItems"));
     raidStatuses.forEach((item) => addCount(item.userId, "raidStatuses"));
 
@@ -106,10 +98,10 @@ function AdminPage() {
       .map((item) => ({
         ...item,
         accountHints: [...item.accountHints],
-          totalDocs: item.accounts + item.characters + item.inventoryItems + item.lootItems + item.raidStatuses
+        totalDocs: item.accounts + item.characters + item.lootItems + item.raidStatuses
       }))
       .sort((a, b) => b.totalDocs - a.totalDocs || a.uid.localeCompare(b.uid));
-        }, [accounts, characters, inventoryItems, lootItems, raidStatuses]);
+        }, [accounts, characters, lootItems, raidStatuses]);
 
   useEffect(() => {
     if (!users.length) {
@@ -133,10 +125,6 @@ function AdminPage() {
   const selectedLoot = useMemo(
     () => lootItems.filter((item) => item.userId === selectedUserId),
     [lootItems, selectedUserId]
-  );
-  const selectedInventory = useMemo(
-    () => inventoryItems.filter((item) => item.userId === selectedUserId),
-    [inventoryItems, selectedUserId]
   );
 
   const onDeleteUserData = async () => {
@@ -196,7 +184,6 @@ function AdminPage() {
                   <th>User ID</th>
                   <th>Account Hints</th>
                   <th>Characters</th>
-                  <th>Inventory</th>
                   <th>Loot Items</th>
                   <th>Raid Statuses</th>
                   <th>Total</th>
@@ -212,7 +199,6 @@ function AdminPage() {
                     <td>{entry.uid}</td>
                     <td>{entry.accountHints.join(", ") || "-"}</td>
                     <td>{entry.characters}</td>
-                    <td>{entry.inventoryItems}</td>
                     <td>{entry.lootItems}</td>
                     <td>{entry.raidStatuses}</td>
                     <td>{entry.totalDocs}</td>
@@ -265,25 +251,6 @@ function AdminPage() {
                 <li>No characters</li>
               )}
             </ul>
-          </div>
-
-          <div className="panel">
-            <h3>Inventory Items ({selectedInventory.length})</h3>
-            <ul className="simple-list">
-              {selectedInventory.length ? (
-                selectedInventory.slice(0, 100).map((item) => (
-                  <li key={item.id}>
-                    <span>{item.itemName || "Unnamed item"}</span>
-                    <span>
-                      {item.characterName || "Unknown"} / {item.locationGroup || "-"}
-                    </span>
-                  </li>
-                ))
-              ) : (
-                <li>No inventory items</li>
-              )}
-            </ul>
-            {selectedInventory.length > 100 ? <p className="subtitle">Showing first 100 items.</p> : null}
           </div>
 
           <div className="panel">
