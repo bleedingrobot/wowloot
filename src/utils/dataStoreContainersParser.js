@@ -70,6 +70,66 @@ function parseArrayLine(line, values) {
   values.push(parseLuaValue(trimmed));
 }
 
+function parseNumericToken(token) {
+  const text = String(token || "").trim();
+  if (!text || text === "nil") {
+    return null;
+  }
+
+  const numberMatch = text.match(/^-?\d+$/);
+  if (!numberMatch) {
+    return null;
+  }
+
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function coerceNumericArray(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => {
+      const parsed = Number(entry);
+      return Number.isFinite(parsed) ? parsed : null;
+    });
+  }
+
+  if (typeof value === "number") {
+    return [value];
+  }
+
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  const text = value.trim();
+  if (!text) {
+    return [];
+  }
+
+  return text
+    .split(/[;,|\s]+/)
+    .map(parseNumericToken)
+    .filter((entry) => entry !== null);
+}
+
+function coerceLinkArray(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  const text = value.trim();
+  if (!text) {
+    return [];
+  }
+
+  const matches = text.match(/\|Hitem:[\s\S]*?\|h\[[\s\S]*?\]\|h(?:\|r)?/g);
+  return matches || [];
+}
+
 function backfillUnknownItemNames(items) {
   const nameById = new Map();
 
@@ -123,9 +183,9 @@ export function parseDataStoreContainers(luaText, fileName = "") {
       return;
     }
 
-    const links = Array.isArray(ctx.links) ? ctx.links : [];
-    const ids = Array.isArray(ctx.ids) ? ctx.ids : [];
-    const counts = Array.isArray(ctx.counts) ? ctx.counts : [];
+    const links = coerceLinkArray(ctx.links);
+    const ids = coerceNumericArray(ctx.ids);
+    const counts = coerceNumericArray(ctx.counts);
     const maxLength = Math.max(links.length, ids.length, counts.length);
 
     for (let slotIndex = 0; slotIndex < maxLength; slotIndex += 1) {

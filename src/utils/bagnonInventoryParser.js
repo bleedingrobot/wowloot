@@ -65,9 +65,13 @@ function looksLikeCharacterKey(key) {
 function extractCount(line) {
   const matches = [
     line.match(/\bcount\s*=\s*(\d+)/i),
+    line.match(/\["count"\]\s*=\s*(\d+)/i),
     line.match(/\bstack\s*=\s*(\d+)/i),
+    line.match(/\["stack"\]\s*=\s*(\d+)/i),
     line.match(/\bquantity\s*=\s*(\d+)/i),
+    line.match(/\["quantity"\]\s*=\s*(\d+)/i),
     line.match(/\bamount\s*=\s*(\d+)/i),
+    line.match(/\["amount"\]\s*=\s*(\d+)/i),
     line.match(/;\s*(\d+)\s*(?:,|$)/),
     line.match(/[x*]\s*(\d+)\s*(?:,|$)/i)
   ];
