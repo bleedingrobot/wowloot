@@ -91,7 +91,7 @@ function getSelectedBagnonConnectedFileIndexes() {
 function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
-  const inventoryItems = useInventory();
+  const inventoryItems = useInventory(user?.uid);
   const [syncMessage, setSyncMessage] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState("idle");

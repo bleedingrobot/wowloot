@@ -5,6 +5,7 @@ import { useUserCollections } from "../hooks/useUserCollections";
 import {
   addAccount,
   addCharacter,
+  clearInventoryData,
   deleteAllUserData,
   replaceInventoryItems,
   updateCharacter,
@@ -21,7 +22,6 @@ import {
 } from "../utils/novaFileConnections";
 import { parseBagnonInventory, summarizeBagnonInventory } from "../utils/bagnonInventoryParser";
 import { parseDataStoreContainers } from "../utils/dataStoreContainersParser";
-import { clearInventoryItems } from "../utils/inventoryLocalStore";
 import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
@@ -676,13 +676,13 @@ function SettingsPage() {
   };
 
   const onClearBagnonInventory = async () => {
-    if (!window.confirm("Clear all local inventory data? You can re-sync at any time to reload from file.")) {
+    if (!window.confirm("Clear synced inventory data for your account? You can re-sync at any time.")) {
       return;
     }
 
     setIsClearingInventory(true);
     try {
-      await clearInventoryItems();
+      await clearInventoryData(user.uid);
       setBagnonSyncMessage("Inventory data cleared.");
     } catch {
       setBagnonSyncMessage("Could not clear inventory data. Try again.");
@@ -823,7 +823,7 @@ function SettingsPage() {
     setSyncMessage("Deleting all data...");
     try {
       await deleteAllUserData(user.uid);
-      await clearInventoryItems();
+      await clearInventoryData(user.uid);
       localStorage.removeItem(NIT_PATHS_KEY);
       localStorage.removeItem(BAGNON_PATHS_KEY);
       await saveConnectedHandles([]);

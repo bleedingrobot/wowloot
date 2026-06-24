@@ -22,6 +22,7 @@ const COLLECTIONS = {
   lootItems: "lootItems",
   shoppingProfiles: "shoppingProfiles"
 };
+const INVENTORY_SNAPSHOTS = "inventorySnapshots";
 
 export function subscribeUserCollection(collectionName, uid, callback) {
   if (!db || !uid) {
@@ -116,8 +117,44 @@ export function deleteShoppingProfile(profileId) {
   return deleteDoc(doc(db, COLLECTIONS.shoppingProfiles, profileId));
 }
 
-export async function replaceInventoryItems(_uid, items) {
-  await saveInventoryItems(items);
+export function subscribeInventorySnapshot(uid, callback) {
+  if (!uid || !db) {
+    callback([]);
+    return () => {};
+  }
+
+  return onSnapshot(doc(db, INVENTORY_SNAPSHOTS, uid), async (snapshot) => {
+    const items = snapshot.exists() && Array.isArray(snapshot.data()?.items)
+      ? snapshot.data().items
+      : [];
+
+    await saveInventoryItems(items);
+    callback(items);
+    dispatchInventoryUpdated();
+  });
+}
+
+export async function replaceInventoryItems(uid, items) {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  if (db && uid) {
+    await setDoc(doc(db, INVENTORY_SNAPSHOTS, uid), {
+      userId: uid,
+      items: safeItems,
+      updatedAt: new Date().toISOString()
+    });
+  }
+
+  await saveInventoryItems(safeItems);
+  dispatchInventoryUpdated();
+}
+
+export async function clearInventoryData(uid) {
+  if (db && uid) {
+    await deleteDoc(doc(db, INVENTORY_SNAPSHOTS, uid));
+  }
+
+  await saveInventoryItems([]);
   dispatchInventoryUpdated();
 }
 
@@ -150,6 +187,8 @@ export async function deleteAllUserData(uid) {
   if (opCount > 0) {
     await batch.commit();
   }
+
+  await deleteDoc(doc(db, INVENTORY_SNAPSHOTS, uid));
 }
 
 export { COLLECTIONS };

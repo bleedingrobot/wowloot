@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useUserCollections } from "../hooks/useUserCollections";
-import { replaceInventoryItems } from "../services/dataService";
+import { clearInventoryData, replaceInventoryItems } from "../services/dataService";
+import { useInventory } from "../hooks/useInventory";
 import { parseDataStoreContainers, summarizeInventoryItems } from "../utils/dataStoreContainersParser";
-import { INVENTORY_UPDATED_EVENT, clearInventoryItems, loadInventoryItems, loadInventoryMeta } from "../utils/inventoryLocalStore";
+import { INVENTORY_UPDATED_EVENT, loadInventoryMeta } from "../utils/inventoryLocalStore";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -16,8 +17,8 @@ function characterKey(name, realm) {
 function InventoryPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
+  const inventoryItems = useInventory(user?.uid);
   const fileInputRef = useRef(null);
-  const [inventoryItems, setInventoryItems] = useState([]);
   const [syncMeta, setSyncMeta] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [importMessage, setImportMessage] = useState("");
@@ -25,7 +26,6 @@ function InventoryPage() {
   const [isClearing, setIsClearing] = useState(false);
 
   const refreshInventory = useCallback(() => {
-    loadInventoryItems().then(setInventoryItems).catch(() => setInventoryItems([]));
     loadInventoryMeta().then(setSyncMeta).catch(() => setSyncMeta(null));
   }, []);
 
@@ -64,14 +64,13 @@ function InventoryPage() {
   }
 
   const onClearInventory = async () => {
-    if (!window.confirm("Clear all local inventory data? Sync again to reload from file.")) {
+    if (!window.confirm("Clear synced inventory data for your account? Sync again to reload from file.")) {
       return;
     }
 
     setIsClearing(true);
     try {
-      await clearInventoryItems();
-      setInventoryItems([]);
+      await clearInventoryData(user.uid);
       setSyncMeta(null);
       setImportMessage("Inventory cleared.");
     } finally {

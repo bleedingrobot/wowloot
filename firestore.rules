@@ -40,5 +40,10 @@ service cloud.firestore {
       allow create: if isAdmin() || isOwner(request.resource.data.userId);
       allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
     }
+
+    match /inventorySnapshots/{uid} {
+      allow create, update: if isAdmin() || (request.auth != null && request.auth.uid == uid && request.resource.data.userId == uid);
+      allow read, delete: if isAdmin() || (request.auth != null && request.auth.uid == uid);
+    }
   }
 }
