@@ -518,7 +518,9 @@ export function parseNovaWorldBuffs(luaText) {
 
     const charCtx = findNearest((entry) => entry.kind === "char");
     const buffTableCtx = findNearest((entry) => entry.kind === "buffTable");
-    if (buffTableCtx && charCtx) {
+    const buffEntryCtx = findNearest((entry) => entry.kind === "buffEntry");
+    // Only match buff entries directly in the buffTable, not properties within buff entries
+    if (buffTableCtx && charCtx && !buffEntryCtx) {
       const buffValueMatch = trimmed.match(/^\["([^"]+)"\]\s*=\s*(?:true|false|\d+|"[^"]*"),?$/);
       if (buffValueMatch) {
         const buffName = normalizeWorldBuffName(buffValueMatch[1]);
