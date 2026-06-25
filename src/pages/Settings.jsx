@@ -25,7 +25,6 @@ import {
   saveConnectedFileMeta,
   saveConnectedHandles
 } from "../utils/novaFileConnections";
-import { parseBagnonInventory, summarizeBagnonInventory } from "../utils/bagnonInventoryParser";
 import { parseDataStoreContainers } from "../utils/dataStoreContainersParser";
 import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
@@ -42,7 +41,7 @@ const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
 const BAGNON_PATHS_KEY = "bagnon_savedvariables_paths";
 const BAGNON_SELECTED_FILE_INDEXES_KEY = "bagnon_selected_file_indexes";
 const NOVA_EXPECTED_FILES = ["NovaInstanceTracker.lua", "NovaWorldBuffs.lua"];
-const INVENTORY_EXPECTED_FILES = ["Bagnon.lua", "DataStore_Containers.lua"];
+const INVENTORY_EXPECTED_FILES = ["DataStore_Containers.lua"];
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -640,21 +639,16 @@ function SettingsPage() {
       const parsedItems = [];
 
       for (const source of sources) {
-        if (String(source.text || "").includes("DataStore_ContainersDB")) {
-          parsedItems.push(...parseDataStoreContainers(source.text, source.fileName || ""));
-        } else {
-          parsedItems.push(...parseBagnonInventory(source.text, source.fileName, source.accountHintName));
-        }
+        parsedItems.push(...parseDataStoreContainers(source.text, source.fileName || ""));
       }
 
       await replaceInventoryItems(user.uid, parsedItems);
-
-      const grouped = summarizeBagnonInventory(parsedItems, data.characters, data.accounts);
+      const uniqueItems = new Set(parsedItems.map((item) => `${item.itemId || ""}|${normalize(item.itemName)}`));
       setBagnonSyncMessage(
-        `Sync complete. Imported ${parsedItems.length} item stacks across ${grouped.length} unique item(s).`
+        `Sync complete. Imported ${parsedItems.length} item stacks across ${uniqueItems.size} unique item(s).`
       );
     } catch (error) {
-      setBagnonSyncMessage("Sync failed. Ensure you selected valid Bagnon SavedVariables files.");
+      setBagnonSyncMessage("Sync failed. Ensure you selected valid DataStore_Containers.lua files.");
     } finally {
       setIsBagnonSyncing(false);
     }
@@ -784,7 +778,7 @@ function SettingsPage() {
         saveBagnonPaths([accountHintName]);
       }
       setBagnonSyncMessage(
-        `Added ${pendingBagnonConnectHandles.length} file selection(s). ${merged.length} Bagnon file(s) now connected.`
+        `Added ${pendingBagnonConnectHandles.length} file selection(s). ${merged.length} inventory file(s) now connected.`
       );
       setPendingBagnonConnectHandles([]);
       setPendingBagnonAccountName("");
@@ -795,7 +789,7 @@ function SettingsPage() {
 
   const onReconnectBagnonConnectedFile = async (index) => {
     if (!window.showOpenFilePicker) {
-      setBagnonSyncMessage("Your browser does not support direct file connections. Use Connect Bagnon and pick files.");
+      setBagnonSyncMessage("Your browser does not support direct file connections. Use Connect Inventory Files and pick files.");
       return;
     }
 
@@ -1078,7 +1072,7 @@ function SettingsPage() {
               </article>
 
               <article className="import-guide-card">
-                <h4>Inventory Import (Bagnon/DataStore)</h4>
+                <h4>Inventory Import (DataStore)</h4>
                 <p className="subtitle">Expected files from SavedVariables:</p>
                 <ul className="import-file-checklist">
                   {inventoryLinkedSummary.expectedStates.map((entry) => (
@@ -1188,16 +1182,16 @@ function SettingsPage() {
           </div>
 
           <div className="panel sync-panel">
-            <h3>Bagnon Inventory Sync</h3>
+            <h3>Inventory Sync (DataStore)</h3>
             <p>
-              Link expected inventory files first, then use Sync Connected Files to refresh bag and bank data.
+              Link DataStore_Containers files first, then use Sync Connected Files to refresh bag and bank data.
             </p>
             {!inventoryLinkedSummary.allLinked ? (
               <p className="sync-warning">Missing expected inventory file links. Check the setup guide above before syncing.</p>
             ) : null}
             <div className="row-actions">
               <button type="button" onClick={onConnectBagnonFiles} disabled={isBagnonSyncing}>
-                Connect Bagnon
+                Connect Inventory Files
               </button>
               <button type="button" onClick={onUpdateFromBagnonConnectedFiles} disabled={isBagnonSyncing}>
                 {isBagnonSyncing ? "Syncing..." : "Sync Connected Files"}
@@ -1238,7 +1232,7 @@ function SettingsPage() {
                   </li>
                 ))
               ) : (
-                <li>No connected files yet. Click Connect Bagnon once.</li>
+                <li>No connected files yet. Click Connect Inventory Files once.</li>
               )}
             </ul>
             {bagnonSyncMessage ? <p>{bagnonSyncMessage}</p> : null}
