@@ -36,6 +36,29 @@ function isCharacterMatch(inventoryItem, character, { loose = false } = {}) {
   return itemRealm === charRealm;
 }
 
+function collectCharacterItems(inventoryItems, character) {
+  const exactNameRealm = inventoryItems.filter((item) => isCharacterMatch(item, character));
+  if (exactNameRealm.length) {
+    return exactNameRealm;
+  }
+
+  const exactNameOnly = inventoryItems.filter(
+    (item) => normalize(item.characterName) === normalize(character.name)
+  );
+  if (exactNameOnly.length) {
+    return exactNameOnly;
+  }
+
+  const looseNameRealm = inventoryItems.filter((item) => isCharacterMatch(item, character, { loose: true }));
+  if (looseNameRealm.length) {
+    return looseNameRealm;
+  }
+
+  return inventoryItems.filter(
+    (item) => normalizeLoose(item.characterName) === normalizeLoose(character.name)
+  );
+}
+
 export function computeShoppingNeeds(character, profiles, inventoryItems) {
   const matchingProfiles = profiles.filter(
     (profile) => normalize(profile.className) === normalize(character.class) || profile.className === "All"
@@ -67,10 +90,7 @@ export function computeShoppingNeeds(character, profiles, inventoryItems) {
   // Sum what this character actually has across all bags and bank.
   // Prefer name matching, but also reconcile through itemId to include stacks
   // that arrived with incomplete/unknown names in SavedVariables parsing.
-  const exactCharacterItems = inventoryItems.filter((item) => isCharacterMatch(item, character));
-  const characterItems = exactCharacterItems.length
-    ? exactCharacterItems
-    : inventoryItems.filter((item) => isCharacterMatch(item, character, { loose: true }));
+  const characterItems = collectCharacterItems(inventoryItems, character);
   const haveCountsByName = new Map();
   const haveCountsByItemId = new Map();
   const itemIdsByName = new Map();
