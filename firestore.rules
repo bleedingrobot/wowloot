@@ -36,6 +36,11 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
     }
 
+    match /buffProfiles/{docId} {
+      allow create: if isAdmin() || isOwner(request.resource.data.userId);
+      allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
+    }
+
     match /inventoryItems/{docId} {
       allow create: if isAdmin() || isOwner(request.resource.data.userId);
       allow read, update, delete: if isAdmin() || isOwner(resource.data.userId);
