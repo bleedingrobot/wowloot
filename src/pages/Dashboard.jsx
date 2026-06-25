@@ -948,26 +948,6 @@ function DashboardPage() {
       {activeRaidNames.length ? (
         <p className="subtitle">Live raid activity detected: {activeRaidNames.join(", ")}.</p>
       ) : null}
-      <div className="panel">
-        <h3>Connected Files</h3>
-        <p className="subtitle">Reconnect any file here instead of going back to Settings.</p>
-        <ul className="simple-list">
-          {connectedFiles.length ? (
-            connectedFiles.map((item, index) => (
-              <li key={item.id}>
-                <span>
-                  {item.fileName || item.name}{item.accountName ? ` (${item.accountName})` : ""}
-                </span>
-                <button type="button" className="secondary-btn" onClick={() => onReconnectConnectedFile(index)}>
-                  Reconnect
-                </button>
-              </li>
-            ))
-          ) : (
-            <li>No connected files yet. Use Settings to connect Nova files first.</li>
-          )}
-        </ul>
-      </div>
 
       <div className="panel">
         <h3>Buff Readiness</h3>
