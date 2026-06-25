@@ -2,6 +2,14 @@ function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeLoose(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function parseCharacterKey(key) {
   const raw = String(key || "").replace(/^Default\./, "");
   const lastDot = raw.lastIndexOf(".");
@@ -158,7 +166,7 @@ function backfillUnknownItemNames(items) {
   });
 }
 
-export function parseDataStoreContainers(luaText, fileName = "") {
+export function parseDataStoreContainers(luaText, fileName = "", accountHintName = "") {
   const lines = String(luaText || "").split(/\r?\n/);
   const stack = [];
   const items = [];
@@ -219,7 +227,8 @@ export function parseDataStoreContainers(luaText, fileName = "") {
         locationGroup: ctx.group,
         bagKey: ctx.bagKey,
         slotIndex: slotIndex + 1,
-        sourceFileName: fileName
+        sourceFileName: fileName,
+        accountHintName: String(accountHintName || "").trim()
       });
     }
   };
@@ -304,12 +313,15 @@ export function parseDataStoreContainers(luaText, fileName = "") {
 
 export function summarizeInventoryItems(items, characters = [], accounts = []) {
   const accountNameById = new Map(accounts.map((account) => [account.id, account.battleNetId]));
-  const characterByKey = new Map(
-    characters.map((character) => [
-      `${normalize(character.name)}|${normalize(character.realm)}`,
-      character
-    ])
-  );
+  const characterByKey = new Map();
+
+  characters.forEach((character) => {
+    const key = `${normalize(character.name)}|${normalize(character.realm)}`;
+    if (!characterByKey.has(key)) {
+      characterByKey.set(key, []);
+    }
+    characterByKey.get(key).push(character);
+  });
 
   const groups = new Map();
 
@@ -340,15 +352,26 @@ export function summarizeInventoryItems(items, characters = [], accounts = []) {
       group.hasKnownName = true;
     }
 
-    const ownerKey = `${normalize(item.characterName)}|${normalize(item.realm)}`;
+    const ownerKey = `${normalize(item.characterName)}|${normalize(item.realm)}|${normalize(item.accountHintName)}`;
 
     if (!group.owners.has(ownerKey)) {
-      const character = characterByKey.get(ownerKey) || null;
+      const candidates = characterByKey.get(`${normalize(item.characterName)}|${normalize(item.realm)}`) || [];
+      const hintedAccount = normalize(item.accountHintName);
+      const character = candidates.find((candidate) => {
+        const candidateAccount = normalize(accountNameById.get(candidate.accountId) || "");
+        if (!hintedAccount) {
+          return true;
+        }
+
+        return candidateAccount === hintedAccount || normalizeLoose(candidate.name) === normalizeLoose(item.characterName);
+      }) || null;
       group.owners.set(ownerKey, {
         characterName: item.characterName,
         realm: item.realm,
         accountId: character?.accountId || "",
-        accountName: character?.accountId ? accountNameById.get(character.accountId) || "" : "",
+        accountName: character?.accountId
+          ? accountNameById.get(character.accountId) || ""
+          : String(item.accountHintName || ""),
         class: character?.class || "",
         faction: character?.faction || "",
         level: character?.level ?? "",

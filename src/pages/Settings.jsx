@@ -639,7 +639,9 @@ function SettingsPage() {
       const parsedItems = [];
 
       for (const source of sources) {
-        parsedItems.push(...parseDataStoreContainers(source.text, source.fileName || ""));
+        parsedItems.push(
+          ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
+        );
       }
 
       await replaceInventoryItems(user.uid, parsedItems);

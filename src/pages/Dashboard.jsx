@@ -386,7 +386,12 @@ function DashboardPage() {
         lockedRaidSummary,
         raidItemsByRaid,
         classIcon: getClassIcon(character.class),
-        shoppingNeeds: computeShoppingNeeds(character, data.shoppingProfiles, inventoryItems)
+        shoppingNeeds: computeShoppingNeeds(
+          character,
+          data.shoppingProfiles,
+          inventoryItems,
+          { accountName: accountNameById.get(character.accountId) || "" }
+        )
       };
     });
 
@@ -435,6 +440,7 @@ function DashboardPage() {
     data.lootItems,
     data.raidStatuses,
     data.shoppingProfiles,
+    accountNameById,
     inventoryItems,
     needFilter,
     availabilityFilter,
@@ -716,7 +722,9 @@ function DashboardPage() {
 
     const parsedItems = [];
     for (const source of luaTexts) {
-      parsedItems.push(...parseDataStoreContainers(source.text, source.fileName || ""));
+      parsedItems.push(
+        ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
+      );
     }
 
     if (!parsedItems.length) {
