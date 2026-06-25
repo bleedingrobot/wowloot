@@ -363,7 +363,7 @@ export function summarizeInventoryItems(items, characters = [], accounts = []) {
           return true;
         }
 
-        return candidateAccount === hintedAccount || normalizeLoose(candidate.name) === normalizeLoose(item.characterName);
+        return candidateAccount === hintedAccount;
       }) || null;
       group.owners.set(ownerKey, {
         characterName: item.characterName,

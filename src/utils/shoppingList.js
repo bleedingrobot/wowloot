@@ -16,16 +16,15 @@ function normalizeItemKey(value) {
     .replace(/\s+/g, " ");
 }
 
-function isCharacterMatch(inventoryItem, character, { loose = false } = {}) {
-  const toNorm = loose ? normalizeLoose : normalize;
-  const itemName = toNorm(inventoryItem.characterName);
-  const charName = toNorm(character.name);
+function isCharacterMatch(inventoryItem, character) {
+  const itemName = normalize(inventoryItem.characterName);
+  const charName = normalize(character.name);
   if (!itemName || !charName || itemName !== charName) {
     return false;
   }
 
-  const itemRealm = toNorm(inventoryItem.realm);
-  const charRealm = toNorm(character.realm);
+  const itemRealm = normalize(inventoryItem.realm);
+  const charRealm = normalize(character.realm);
 
   // Some imports (especially Bagnon-style) may not include realm details.
   // If either side is blank, fall back to character-name matching.
@@ -57,14 +56,7 @@ function collectCharacterItems(inventoryItems, character, { accountName = "" } =
     return exactNameOnly;
   }
 
-  const looseNameRealm = accountScopedItems.filter((item) => isCharacterMatch(item, character, { loose: true }));
-  if (looseNameRealm.length) {
-    return looseNameRealm;
-  }
-
-  return accountScopedItems.filter(
-    (item) => normalizeLoose(item.characterName) === normalizeLoose(character.name)
-  );
+  return [];
 }
 
 export function computeShoppingNeeds(character, profiles, inventoryItems, { accountName = "" } = {}) {
