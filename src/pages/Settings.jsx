@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { RAIDS } from "../data/raids";
 import { useUserCollections } from "../hooks/useUserCollections";
@@ -11,7 +11,12 @@ import {
   updateCharacter,
   upsertRaidStatus
 } from "../services/dataService";
-import { parseNovaActiveInstances, parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import {
+  parseNovaActiveInstances,
+  parseNovaCharacters,
+  parseNovaSavedInstances,
+  parseNovaWorldBuffs
+} from "../utils/novaInstanceParser";
 import {
   buildConnectedFileEntries,
   loadConnectedHandles,
@@ -30,11 +35,14 @@ import {
   saveConnectedFileMeta as saveBagnonConnectedFileMeta,
   saveConnectedHandles as saveBagnonConnectedHandles
 } from "../utils/bagnonFileConnections";
+import { getCharacterFilterOptions, matchesCharacterFilters, resolveRaidTagLabel } from "../utils/characterFilters";
 
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
 const BAGNON_PATHS_KEY = "bagnon_savedvariables_paths";
 const BAGNON_SELECTED_FILE_INDEXES_KEY = "bagnon_selected_file_indexes";
+const NOVA_EXPECTED_FILES = ["NovaInstanceTracker.lua", "NovaWorldBuffs.lua"];
+const INVENTORY_EXPECTED_FILES = ["Bagnon.lua", "DataStore_Containers.lua"];
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -61,6 +69,25 @@ function getFileLabelHint(paths) {
   return labels.length === 1 ? labels[0] : "";
 }
 
+function summarizeLinkedFiles(files, expectedFiles) {
+  const linkedNames = files
+    .map((file) => String(file.fileName || file.name || "").trim().toLowerCase())
+    .filter(Boolean);
+
+  const expectedStates = expectedFiles.map((expectedName) => {
+    const lowerExpected = expectedName.toLowerCase();
+    const linked = linkedNames.some((name) => name === lowerExpected || name.endsWith(`/${lowerExpected}`));
+    return { fileName: expectedName, linked };
+  });
+
+  const linkedCount = expectedStates.filter((entry) => entry.linked).length;
+  return {
+    expectedStates,
+    linkedCount,
+    allLinked: linkedCount === expectedFiles.length
+  };
+}
+
 function SettingsPage() {
   const { user, hasFirebaseConfig, signInWithGoogle, signOutUser } = useAuth();
   const { data } = useUserCollections(user?.uid);
@@ -70,8 +97,14 @@ function SettingsPage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBagnonSyncing, setIsBagnonSyncing] = useState(false);
   const [isDeletingAll, setIsDeletingAll] = useState(false);
-  const [showOnlyLevel60, setShowOnlyLevel60] = useState(false);
-  const [savingVisibilityId, setSavingVisibilityId] = useState("");
+  const [savingCharacterId, setSavingCharacterId] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [classFilter, setClassFilter] = useState("all");
+  const [realmFilter, setRealmFilter] = useState("all");
+  const [accountFilter, setAccountFilter] = useState("all");
+  const [minLevelFilter, setMinLevelFilter] = useState("");
+  const [visibilityFilter, setVisibilityFilter] = useState("all");
+  const [activeRaidTagFilter, setActiveRaidTagFilter] = useState("all");
   const [connectedFiles, setConnectedFiles] = useState([]);
   const [pendingConnectHandles, setPendingConnectHandles] = useState([]);
   const [pendingAccountName, setPendingAccountName] = useState("");
@@ -80,7 +113,79 @@ function SettingsPage() {
   const [pendingBagnonConnectHandles, setPendingBagnonConnectHandles] = useState([]);
   const [pendingBagnonAccountName, setPendingBagnonAccountName] = useState("");
   const [isClearingInventory, setIsClearingInventory] = useState(false);
-  const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
+  const [novaValidationMessage, setNovaValidationMessage] = useState("");
+  const [inventoryValidationMessage, setInventoryValidationMessage] = useState("");
+  const [novaValidationRun, setNovaValidationRun] = useState(false);
+  const [inventoryValidationRun, setInventoryValidationRun] = useState(false);
+  const accountNameById = useMemo(
+    () => new Map(data.accounts.map((account) => [account.id, account.battleNetId])),
+    [data.accounts]
+  );
+  const filterOptions = useMemo(
+    () => getCharacterFilterOptions(data.characters, accountNameById),
+    [data.characters, accountNameById]
+  );
+  const filteredCharacters = useMemo(
+    () => data.characters.filter((character) => matchesCharacterFilters(character, {
+      searchTerm,
+      classFilter,
+      factionFilter: "all",
+      realmFilter,
+      accountFilter,
+      minLevelFilter,
+      visibilityFilter,
+      activeRaidTagFilter
+    }, accountNameById)),
+    [
+      data.characters,
+      searchTerm,
+      classFilter,
+      realmFilter,
+      accountFilter,
+      minLevelFilter,
+      visibilityFilter,
+      activeRaidTagFilter,
+      accountNameById
+    ]
+  );
+
+  const novaLinkedSummary = useMemo(
+    () => summarizeLinkedFiles(connectedFiles, NOVA_EXPECTED_FILES),
+    [connectedFiles]
+  );
+
+  const inventoryLinkedSummary = useMemo(
+    () => summarizeLinkedFiles(bagnonConnectedFiles, INVENTORY_EXPECTED_FILES),
+    [bagnonConnectedFiles]
+  );
+
+  const validateNovaSetup = useCallback(() => {
+    const missingFiles = novaLinkedSummary.expectedStates
+      .filter((entry) => !entry.linked)
+      .map((entry) => entry.fileName);
+
+    setNovaValidationRun(true);
+    if (!missingFiles.length) {
+      setNovaValidationMessage("Nova setup ready. All expected files are linked.");
+      return;
+    }
+
+    setNovaValidationMessage(`Nova setup incomplete. Missing: ${missingFiles.join(", ")}.`);
+  }, [novaLinkedSummary]);
+
+  const validateInventorySetup = useCallback(() => {
+    const missingFiles = inventoryLinkedSummary.expectedStates
+      .filter((entry) => !entry.linked)
+      .map((entry) => entry.fileName);
+
+    setInventoryValidationRun(true);
+    if (!missingFiles.length) {
+      setInventoryValidationMessage("Inventory setup ready. All expected files are linked.");
+      return;
+    }
+
+    setInventoryValidationMessage(`Inventory setup incomplete. Missing: ${missingFiles.join(", ")}.`);
+  }, [inventoryLinkedSummary]);
 
   const readSelectedFileIndexes = () => {
     try {
@@ -221,6 +326,7 @@ function SettingsPage() {
       const parsedCharacters = [];
       const parsed = [];
       const activeRaids = [];
+      const parsedWorldBuffStates = [];
 
       for (const source of sources) {
         const sourceAccount = (source.accountHintName || "").trim();
@@ -240,6 +346,20 @@ function SettingsPage() {
           accountId: sourceAccountId
         }));
         parsedCharacters.push(...parsedFromSource);
+        const worldBuffStates = parseNovaWorldBuffs(source.text).map((entry) => ({
+          ...entry,
+          accountId: sourceAccountId
+        }));
+        parsedWorldBuffStates.push(...worldBuffStates);
+        parsedCharacters.push(...worldBuffStates.map((entry) => ({
+          name: entry.name,
+          realm: entry.realm,
+          className: entry.className || "Unknown",
+          faction: entry.faction || "Unknown",
+          level: typeof entry.level === "number" ? entry.level : null,
+          restedXp: null,
+          accountId: sourceAccountId
+        })));
         parsed.push(...parseNovaSavedInstances(source.text));
         activeRaids.push(...parseNovaActiveInstances(source.text));
       }
@@ -271,6 +391,7 @@ function SettingsPage() {
             restedXp: typeof parsedCharacter.restedXp === "number" ? parsedCharacter.restedXp : 0,
             avatarUrl: "",
             showOnDashboard: true,
+            activeRaidTag: "",
             importedFromNova: true
           };
           const created = await addCharacter(user.uid, payload);
@@ -367,10 +488,68 @@ function SettingsPage() {
 
       await Promise.all(updates);
 
+      const worldBuffStateByCharacter = new Map();
+      parsedWorldBuffStates.forEach((entry) => {
+        const key = characterKey(entry.name, entry.realm);
+        const existing = worldBuffStateByCharacter.get(key);
+
+        if (!existing) {
+          worldBuffStateByCharacter.set(key, {
+            buffs: new Set(entry.buffs || []),
+            storedBuffs: new Set(entry.storedBuffs || []),
+            chronoCount: entry.chronoCount || 0,
+            onyCount: entry.onyCount || 0,
+            nefCount: entry.nefCount || 0,
+            rendCount: entry.rendCount || 0,
+            zanCount: entry.zanCount || 0,
+            dmfCount: entry.dmfCount || 0
+          });
+          return;
+        }
+
+        (entry.buffs || []).forEach((buff) => existing.buffs.add(buff));
+        (entry.storedBuffs || []).forEach((buff) => existing.storedBuffs.add(buff));
+        existing.chronoCount = Math.max(existing.chronoCount || 0, entry.chronoCount || 0);
+        existing.onyCount = Math.max(existing.onyCount || 0, entry.onyCount || 0);
+        existing.nefCount = Math.max(existing.nefCount || 0, entry.nefCount || 0);
+        existing.rendCount = Math.max(existing.rendCount || 0, entry.rendCount || 0);
+        existing.zanCount = Math.max(existing.zanCount || 0, entry.zanCount || 0);
+        existing.dmfCount = Math.max(existing.dmfCount || 0, entry.dmfCount || 0);
+      });
+
+      const buffUpdateOps = [];
+      allCharacters.forEach((character) => {
+        const key = characterKey(character.name, character.realm);
+        const buffState = worldBuffStateByCharacter.get(key);
+        if (!buffState) {
+          return;
+        }
+
+        buffUpdateOps.push(
+          updateCharacter(character.id, {
+            buffs: [...buffState.buffs].sort((a, b) => a.localeCompare(b)),
+            storedBuffs: [...buffState.storedBuffs].sort((a, b) => a.localeCompare(b)),
+            chronoCount: buffState.chronoCount || 0,
+            buffCounts: {
+              ony: buffState.onyCount || 0,
+              nef: buffState.nefCount || 0,
+              rend: buffState.rendCount || 0,
+              zan: buffState.zanCount || 0,
+              dmf: buffState.dmfCount || 0
+            },
+            lastBuffSyncAt: new Date().toISOString()
+          })
+        );
+      });
+
+      if (buffUpdateOps.length) {
+        await Promise.all(buffUpdateOps);
+      }
+
       const totalMatches = parsed.length;
       const currentRaidNames = Array.from(new Set(activeRaids.map((entry) => entry.raidName)));
       setSyncMessage(
-        `Sync complete. Imported ${totalMatches} saved raid entries and added ${createdCharacters.length} new characters.${currentRaidNames.length ? ` Current raid activity: ${currentRaidNames.join(", ")}.` : ""}`
+        `Sync complete. Imported ${totalMatches} saved raid entries, ${parsedWorldBuffStates.length} buff snapshots, and added ${createdCharacters.length} new characters.${currentRaidNames.length ? ` Current raid activity: ${currentRaidNames.join(", ")}.` : ""}`
       );
     } catch (error) {
       setSyncMessage("Sync failed. Ensure you selected a valid NovaInstanceTracker.lua file.");
@@ -799,11 +978,20 @@ function SettingsPage() {
   };
 
   const onToggleDashboardVisibility = async (characterId, checked) => {
-    setSavingVisibilityId(characterId);
+    setSavingCharacterId(characterId);
     try {
       await updateCharacter(characterId, { showOnDashboard: checked });
     } finally {
-      setSavingVisibilityId("");
+      setSavingCharacterId("");
+    }
+  };
+
+  const onChangeActiveRaidTag = async (characterId, activeRaidTag) => {
+    setSavingCharacterId(characterId);
+    try {
+      await updateCharacter(characterId, { activeRaidTag });
+    } finally {
+      setSavingCharacterId("");
     }
   };
 
@@ -855,11 +1043,80 @@ function SettingsPage() {
             Signed in as <strong>{user.email}</strong>
           </p>
 
+          <div className="panel import-guide-panel">
+            <h3>Import Setup Guide</h3>
+            <p className="subtitle">Link files once per browser, then sync whenever your SavedVariables change.</p>
+            <div className="import-guide-grid">
+              <article className="import-guide-card">
+                <h4>Raid + Buff Import (Nova)</h4>
+                <p className="subtitle">Expected files from SavedVariables:</p>
+                <ul className="import-file-checklist">
+                  {novaLinkedSummary.expectedStates.map((entry) => (
+                    <li
+                      key={entry.fileName}
+                      className={`import-file-item ${entry.linked ? "linked" : "missing"}${novaValidationRun && !entry.linked ? " needs-attention" : ""}`}
+                    >
+                      <span>{entry.fileName}</span>
+                      <span className={`import-status-chip ${entry.linked ? "ready" : "missing"}`}>
+                        {entry.linked ? "Linked" : "Missing"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="row-actions import-guide-actions">
+                  <button type="button" className="secondary-btn" onClick={validateNovaSetup}>
+                    Check Nova Setup
+                  </button>
+                  {novaValidationMessage ? <span className="subtitle">{novaValidationMessage}</span> : null}
+                </div>
+                <p className="subtitle">
+                  Updates: characters, raid lockouts, active raids, world buffs, booned buffs.
+                </p>
+                <p className="subtitle">
+                  Status: {novaLinkedSummary.linkedCount}/{NOVA_EXPECTED_FILES.length} expected file(s) linked.
+                </p>
+              </article>
+
+              <article className="import-guide-card">
+                <h4>Inventory Import (Bagnon/DataStore)</h4>
+                <p className="subtitle">Expected files from SavedVariables:</p>
+                <ul className="import-file-checklist">
+                  {inventoryLinkedSummary.expectedStates.map((entry) => (
+                    <li
+                      key={entry.fileName}
+                      className={`import-file-item ${entry.linked ? "linked" : "missing"}${inventoryValidationRun && !entry.linked ? " needs-attention" : ""}`}
+                    >
+                      <span>{entry.fileName}</span>
+                      <span className={`import-status-chip ${entry.linked ? "ready" : "missing"}`}>
+                        {entry.linked ? "Linked" : "Missing"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <div className="row-actions import-guide-actions">
+                  <button type="button" className="secondary-btn" onClick={validateInventorySetup}>
+                    Check Inventory Setup
+                  </button>
+                  {inventoryValidationMessage ? <span className="subtitle">{inventoryValidationMessage}</span> : null}
+                </div>
+                <p className="subtitle">
+                  Updates: bag and bank inventory index used by Shopping and Dashboard totals.
+                </p>
+                <p className="subtitle">
+                  Status: {inventoryLinkedSummary.linkedCount}/{INVENTORY_EXPECTED_FILES.length} expected file(s) linked.
+                </p>
+              </article>
+            </div>
+          </div>
+
           <div className="panel sync-panel">
             <h3>NovaInstanceTracker Sync</h3>
             <p>
-              Connect Nova files once, then use Sync Selected whenever you want to refresh the site.
+              Link expected Nova files first, then use Sync Connected Files to refresh raid and buff data.
             </p>
+            {!novaLinkedSummary.allLinked ? (
+              <p className="sync-warning">Missing expected Nova file links. Check the setup guide above before syncing.</p>
+            ) : null}
             <div className="row-actions">
               <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
                 Connect Nova
@@ -933,8 +1190,11 @@ function SettingsPage() {
           <div className="panel sync-panel">
             <h3>Bagnon Inventory Sync</h3>
             <p>
-              Connect Bagnon files once, then use Sync Selected to refresh your bag and bank inventory index.
+              Link expected inventory files first, then use Sync Connected Files to refresh bag and bank data.
             </p>
+            {!inventoryLinkedSummary.allLinked ? (
+              <p className="sync-warning">Missing expected inventory file links. Check the setup guide above before syncing.</p>
+            ) : null}
             <div className="row-actions">
               <button type="button" onClick={onConnectBagnonFiles} disabled={isBagnonSyncing}>
                 Connect Bagnon
@@ -1013,40 +1273,103 @@ function SettingsPage() {
           </div>
 
           <div className="panel">
-            <h3>Dashboard Visibility</h3>
-            <p>Choose which characters appear on the dashboard.</p>
-            <label className="saved-toggle">
+            <h3>Character Tags & Visibility</h3>
+            <p>Tag active raiders and control who appears on dashboard and inventory views.</p>
+            <div className="dashboard-filters settings-character-filters">
               <input
-                type="checkbox"
-                checked={showOnlyLevel60}
-                onChange={(event) => setShowOnlyLevel60(event.target.checked)}
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Search name, realm, account, or raid tag"
               />
-              Show only level 60
-            </label>
-            <ul className="simple-list">
-              {data.characters
-                .filter((character) => !showOnlyLevel60 || Number(character.level) === 60)
-                .map((character) => (
-                <li key={character.id}>
-                  <span>
-                    {character.name} - {character.realm} - {character.accountId
-                      ? accountNameById.get(character.accountId) || "Unknown account"
-                      : "Unassigned"} - L{character.level ?? "?"}
-                  </span>
-                  <label className="saved-toggle">
-                    <input
-                      type="checkbox"
-                      checked={character.showOnDashboard !== false}
-                      disabled={savingVisibilityId === character.id}
-                      onChange={(event) =>
-                        onToggleDashboardVisibility(character.id, event.target.checked)
-                      }
-                    />
-                    Show
-                  </label>
-                </li>
-              ))}
-            </ul>
+              <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+                <option value="all">All classes</option>
+                {filterOptions.classOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <select value={realmFilter} onChange={(event) => setRealmFilter(event.target.value)}>
+                <option value="all">All realms</option>
+                {filterOptions.realmOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+                <option value="all">All accounts</option>
+                {filterOptions.accountOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <select value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value)}>
+                <option value="all">All visibility</option>
+                <option value="visible">Shown on dashboard</option>
+                <option value="hidden">Hidden from dashboard</option>
+              </select>
+              <select value={activeRaidTagFilter} onChange={(event) => setActiveRaidTagFilter(event.target.value)}>
+                <option value="all">All raid tags</option>
+                <option value="tagged">Tagged only</option>
+                <option value="untagged">Untagged only</option>
+                {filterOptions.activeRaidTagOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {resolveRaidTagLabel(option, RAIDS)}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={minLevelFilter}
+                onChange={(event) => setMinLevelFilter(event.target.value)}
+                placeholder="Min level"
+              />
+            </div>
+            {filteredCharacters.length ? (
+              <ul className="simple-list">
+                {filteredCharacters.map((character) => (
+                  <li key={character.id}>
+                    <span>
+                      {character.name} - {character.realm} - {character.accountId
+                        ? accountNameById.get(character.accountId) || "Unknown account"
+                        : "Unassigned"} - L{character.level ?? "?"}
+                      {character.activeRaidTag ? ` - ${resolveRaidTagLabel(character.activeRaidTag, RAIDS)}` : ""}
+                    </span>
+                    <div className="row-actions character-management-actions">
+                      <select
+                        value={character.activeRaidTag || ""}
+                        disabled={savingCharacterId === character.id}
+                        onChange={(event) => onChangeActiveRaidTag(character.id, event.target.value)}
+                      >
+                        <option value="">No raid tag</option>
+                        {RAIDS.map((raid) => (
+                          <option key={raid.name} value={raid.name}>
+                            {raid.short} - {raid.name}
+                          </option>
+                        ))}
+                      </select>
+                      <label className="saved-toggle">
+                        <input
+                          type="checkbox"
+                          checked={character.showOnDashboard !== false}
+                          disabled={savingCharacterId === character.id}
+                          onChange={(event) =>
+                            onToggleDashboardVisibility(character.id, event.target.checked)
+                          }
+                        />
+                        Show
+                      </label>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="empty-panel">No characters match these settings filters.</p>
+            )}
           </div>
 
           <button type="button" onClick={signOutUser}>

@@ -8,7 +8,8 @@ function CharacterCard({
   lockedRaidSummary,
   raidItemsByRaid,
   classIcon,
-  shoppingNeeds
+  shoppingNeeds,
+  activeRaidTagLabel
 }) {
 
   return (
@@ -27,6 +28,7 @@ function CharacterCard({
           <p>
             {character.class} | {character.faction} | {character.realm}
           </p>
+          {activeRaidTagLabel ? <p className="character-tag-line">Active raid tag: {activeRaidTagLabel}</p> : null}
         </div>
       </header>
 

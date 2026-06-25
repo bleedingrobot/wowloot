@@ -6,7 +6,8 @@ const DEFAULT = {
   characters: [],
   raidStatuses: [],
   lootItems: [],
-  shoppingProfiles: []
+  shoppingProfiles: [],
+  buffProfiles: []
 };
 
 export function useUserCollections(uid) {
@@ -44,6 +45,9 @@ export function useUserCollections(uid) {
     );
     unsubscribers.push(
       subscribeUserCollection(COLLECTIONS.shoppingProfiles, uid, (docs) => update("shoppingProfiles", docs))
+    );
+    unsubscribers.push(
+      subscribeUserCollection(COLLECTIONS.buffProfiles, uid, (docs) => update("buffProfiles", docs))
     );
 
     return () => {

@@ -20,7 +20,8 @@ const COLLECTIONS = {
   characters: "characters",
   raidStatuses: "raidStatuses",
   lootItems: "lootItems",
-  shoppingProfiles: "shoppingProfiles"
+  shoppingProfiles: "shoppingProfiles",
+  buffProfiles: "buffProfiles"
 };
 const INVENTORY_SNAPSHOTS = "inventorySnapshots";
 
@@ -115,6 +116,22 @@ export function updateShoppingProfile(profileId, payload) {
 
 export function deleteShoppingProfile(profileId) {
   return deleteDoc(doc(db, COLLECTIONS.shoppingProfiles, profileId));
+}
+
+export function addBuffProfile(uid, payload) {
+  return addDoc(collection(db, COLLECTIONS.buffProfiles), {
+    userId: uid,
+    ...payload,
+    createdAt: new Date().toISOString()
+  });
+}
+
+export function updateBuffProfile(profileId, payload) {
+  return updateDoc(doc(db, COLLECTIONS.buffProfiles, profileId), payload);
+}
+
+export function deleteBuffProfile(profileId) {
+  return deleteDoc(doc(db, COLLECTIONS.buffProfiles, profileId));
 }
 
 export function subscribeInventorySnapshot(uid, callback) {

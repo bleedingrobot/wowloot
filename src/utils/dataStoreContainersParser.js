@@ -347,7 +347,13 @@ export function summarizeInventoryItems(items, characters = [], accounts = []) {
       group.owners.set(ownerKey, {
         characterName: item.characterName,
         realm: item.realm,
+        accountId: character?.accountId || "",
         accountName: character?.accountId ? accountNameById.get(character.accountId) || "" : "",
+        class: character?.class || "",
+        faction: character?.faction || "",
+        level: character?.level ?? "",
+        showOnDashboard: character?.showOnDashboard !== false,
+        activeRaidTag: character?.activeRaidTag || "",
         bags: 0,
         bank: 0,
         total: 0,

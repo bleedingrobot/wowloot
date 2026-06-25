@@ -347,3 +347,205 @@ export function parseNovaCharacters(luaText) {
 
   return [...deduped.values()];
 }
+
+export function parseNovaWorldBuffs(luaText) {
+  const lines = String(luaText || "").split(/\r?\n/);
+  const stack = [];
+  const results = [];
+
+  const pushContext = (ctx) => stack.push(ctx);
+
+  const findNearest = (predicate) => {
+    for (let index = stack.length - 1; index >= 0; index -= 1) {
+      if (predicate(stack[index])) {
+        return stack[index];
+      }
+    }
+    return null;
+  };
+
+  const popContext = () => {
+    const ctx = stack.pop();
+    if (ctx?.kind === "char") {
+      results.push({
+        name: ctx.name,
+        realm: ctx.realm,
+        faction: ctx.faction,
+        className: ctx.className,
+        level: ctx.level,
+        buffs: [...ctx.buffs],
+        storedBuffs: [...ctx.storedBuffs],
+        chronoCount: ctx.chronoCount,
+        chronoCooldown: ctx.chronoCooldown,
+        onyCount: ctx.onyCount,
+        nefCount: ctx.nefCount,
+        rendCount: ctx.rendCount,
+        zanCount: ctx.zanCount,
+        dmfCount: ctx.dmfCount
+      });
+    }
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    const keyedOpen = trimmed.match(/^\["([^"]+)"\]\s*=\s*\{$/);
+    if (keyedOpen) {
+      const key = keyedOpen[1];
+      const parent = stack[stack.length - 1];
+
+      if (!parent && key === "global") {
+        pushContext({ kind: "global", key });
+        return;
+      }
+
+      if (parent?.kind === "global") {
+        pushContext({ kind: "realm", key, realm: key });
+        return;
+      }
+
+      if (parent?.kind === "realm" && (key === "Alliance" || key === "Horde")) {
+        pushContext({ kind: "faction", key, faction: key });
+        return;
+      }
+
+      if (key === "myChars") {
+        pushContext({ kind: "myChars", key });
+        return;
+      }
+
+      if (parent?.kind === "myChars") {
+        const realmCtx = findNearest((entry) => entry.kind === "realm");
+        const factionCtx = findNearest((entry) => entry.kind === "faction");
+        pushContext({
+          kind: "char",
+          key,
+          name: key,
+          realm: realmCtx?.realm || "",
+          faction: factionCtx?.faction || "Unknown",
+          className: "Unknown",
+          level: null,
+          chronoCount: 0,
+          chronoCooldown: null,
+          onyCount: 0,
+          nefCount: 0,
+          rendCount: 0,
+          zanCount: 0,
+          dmfCount: 0,
+          buffs: new Set(),
+          storedBuffs: new Set()
+        });
+        return;
+      }
+
+      if (parent?.kind === "char" && (key === "buffs" || key === "storedBuffs")) {
+        pushContext({ kind: "buffTable", key, tableType: key });
+        return;
+      }
+
+      if (parent?.kind === "buffTable") {
+        const charCtx = findNearest((entry) => entry.kind === "char");
+        if (charCtx) {
+          if (parent.tableType === "buffs") {
+            charCtx.buffs.add(key);
+          } else {
+            charCtx.storedBuffs.add(key);
+          }
+        }
+        pushContext({ kind: "buffEntry", key });
+        return;
+      }
+
+      pushContext({ kind: "object", key });
+      return;
+    }
+
+    if (trimmed === "{" || trimmed.endsWith("= {")) {
+      pushContext({ kind: "object", key: null });
+      return;
+    }
+
+    const charCtx = findNearest((entry) => entry.kind === "char");
+    if (charCtx) {
+      const classMatch = trimmed.match(/^\["localizedClass"\]\s*=\s*"([^"]+)",?$/);
+      if (classMatch) {
+        charCtx.className = classMatch[1];
+      }
+
+      const levelMatch = trimmed.match(/^\["level"\]\s*=\s*(\d+),?$/);
+      if (levelMatch) {
+        charCtx.level = Number(levelMatch[1]);
+      }
+
+      const chronoCountMatch = trimmed.match(/^\["chronoCount"\]\s*=\s*(\d+),?$/);
+      if (chronoCountMatch) {
+        charCtx.chronoCount = Number(chronoCountMatch[1]);
+      }
+
+      const chronoCooldownMatch = trimmed.match(/^\["chronoCooldown"\]\s*=\s*([0-9.]+),?$/);
+      if (chronoCooldownMatch) {
+        charCtx.chronoCooldown = Number(chronoCooldownMatch[1]);
+      }
+
+      const onyCountMatch = trimmed.match(/^\["onyCount"\]\s*=\s*(\d+),?$/);
+      if (onyCountMatch) {
+        charCtx.onyCount = Number(onyCountMatch[1]);
+      }
+
+      const nefCountMatch = trimmed.match(/^\["nefCount"\]\s*=\s*(\d+),?$/);
+      if (nefCountMatch) {
+        charCtx.nefCount = Number(nefCountMatch[1]);
+      }
+
+      const rendCountMatch = trimmed.match(/^\["rendCount"\]\s*=\s*(\d+),?$/);
+      if (rendCountMatch) {
+        charCtx.rendCount = Number(rendCountMatch[1]);
+      }
+
+      const zanCountMatch = trimmed.match(/^\["zanCount"\]\s*=\s*(\d+),?$/);
+      if (zanCountMatch) {
+        charCtx.zanCount = Number(zanCountMatch[1]);
+      }
+
+      const dmfCountMatch = trimmed.match(/^\["dmfCount"\]\s*=\s*(\d+),?$/);
+      if (dmfCountMatch) {
+        charCtx.dmfCount = Number(dmfCountMatch[1]);
+      }
+    }
+
+    const closes = (trimmed.match(/}/g) || []).length;
+    for (let index = 0; index < closes; index += 1) {
+      if (stack.length) {
+        popContext();
+      }
+    }
+  });
+
+  const deduped = new Map();
+  results.forEach((entry) => {
+    if (!entry.name || !entry.realm) {
+      return;
+    }
+
+    const key = `${entry.name.toLowerCase()}|${entry.realm.toLowerCase()}`;
+    const existing = deduped.get(key);
+    if (!existing) {
+      deduped.set(key, entry);
+      return;
+    }
+
+    deduped.set(key, {
+      ...existing,
+      buffs: Array.from(new Set([...(existing.buffs || []), ...(entry.buffs || [])])),
+      storedBuffs: Array.from(new Set([...(existing.storedBuffs || []), ...(entry.storedBuffs || [])])),
+      chronoCount: Math.max(existing.chronoCount || 0, entry.chronoCount || 0),
+      onyCount: Math.max(existing.onyCount || 0, entry.onyCount || 0),
+      nefCount: Math.max(existing.nefCount || 0, entry.nefCount || 0),
+      rendCount: Math.max(existing.rendCount || 0, entry.rendCount || 0),
+      zanCount: Math.max(existing.zanCount || 0, entry.zanCount || 0),
+      dmfCount: Math.max(existing.dmfCount || 0, entry.dmfCount || 0)
+    });
+  });
+
+  return [...deduped.values()];
+}

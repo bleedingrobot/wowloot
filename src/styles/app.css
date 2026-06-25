@@ -379,6 +379,96 @@ button.danger {
   color: var(--text-main);
 }
 
+.import-guide-panel {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.import-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.import-guide-card {
+  border: 1px solid rgba(158, 176, 206, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.import-guide-card h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.import-guide-actions {
+  align-items: flex-start;
+}
+
+.import-guide-actions .subtitle {
+  margin: 0;
+}
+
+.import-file-checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.import-file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 10px;
+  border: 1px solid rgba(158, 176, 206, 0.16);
+  padding: 0.45rem 0.55rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.import-file-item.linked {
+  border-color: rgba(99, 230, 190, 0.34);
+  background: rgba(99, 230, 190, 0.08);
+}
+
+.import-file-item.missing {
+  border-color: rgba(255, 122, 122, 0.34);
+  background: rgba(255, 122, 122, 0.08);
+}
+
+.import-file-item.needs-attention {
+  box-shadow: 0 0 0 1px rgba(255, 122, 122, 0.32), 0 0 0 3px rgba(255, 122, 122, 0.12);
+}
+
+.import-status-chip {
+  border-radius: 999px;
+  border: 1px solid rgba(158, 176, 206, 0.24);
+  padding: 0.12rem 0.45rem;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.import-status-chip.ready {
+  border-color: rgba(99, 230, 190, 0.44);
+  color: #ccffef;
+}
+
+.import-status-chip.missing {
+  border-color: rgba(255, 122, 122, 0.44);
+  color: #ffd8d8;
+}
+
+.sync-warning {
+  margin: 0.2rem 0 0;
+  color: #ffd8d8;
+}
+
 .inventory-stats {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -527,6 +617,92 @@ button.danger {
 
 .shopping-items-list li {
   align-items: center;
+}
+
+.buff-checklist-grid {
+  margin-top: 0.35rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.35rem;
+}
+
+.buff-check-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid rgba(158, 176, 206, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.45rem 0.55rem;
+}
+
+.buff-readiness-list li {
+  align-items: flex-start;
+}
+
+.buff-readiness-list strong {
+  color: var(--accent);
+}
+
+.buff-readiness-item {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.buff-readiness-filters {
+  margin: 0.5rem 0 0.7rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(160px, 1fr));
+  gap: 0.55rem;
+}
+
+.buff-readiness-filters select {
+  min-height: 40px;
+}
+
+.buff-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.buff-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid rgba(158, 176, 206, 0.28);
+  padding: 0.2rem 0.55rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.buff-chip.active {
+  border-color: rgba(99, 230, 190, 0.44);
+  color: #ccffef;
+  background: rgba(99, 230, 190, 0.16);
+}
+
+.buff-chip.booned {
+  border-color: rgba(125, 211, 252, 0.42);
+  color: #d5f3ff;
+  background: rgba(125, 211, 252, 0.14);
+}
+
+.buff-chip.missing {
+  border-color: rgba(255, 122, 122, 0.4);
+  color: #ffd8d8;
+  background: rgba(255, 122, 122, 0.14);
+}
+
+@media (max-width: 780px) {
+  .import-guide-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .buff-readiness-filters {
+    grid-template-columns: 1fr;
+  }
 }
 
 .sync-pill {

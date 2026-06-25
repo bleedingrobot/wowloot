@@ -8,6 +8,7 @@ const links = [
   { to: "/loot", label: "Loot" },
   { to: "/inventory", label: "Inventory" },
   { to: "/shopping", label: "Shopping" },
+  { to: "/buff-profiles", label: "Buff Profiles" },
   { to: "/rested", label: "Rested XP" },
   { to: "/settings", label: "Settings" }
 ];

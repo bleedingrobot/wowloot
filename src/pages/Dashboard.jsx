@@ -6,9 +6,15 @@ import { useUserCollections } from "../hooks/useUserCollections";
 import { getNextRaidReset, formatCountdown, isRaidLocked } from "../utils/raidReset";
 import { getClassIcon } from "../utils/classIcons";
 import { addAccount, addCharacter, updateCharacter, upsertRaidStatus } from "../services/dataService";
-import { parseNovaActiveInstances, parseNovaCharacters, parseNovaSavedInstances } from "../utils/novaInstanceParser";
+import {
+  parseNovaActiveInstances,
+  parseNovaCharacters,
+  parseNovaSavedInstances,
+  parseNovaWorldBuffs
+} from "../utils/novaInstanceParser";
 import { useInventory } from "../hooks/useInventory";
 import { computeShoppingNeeds } from "../utils/shoppingList";
+import { getCharacterBuffSet, normalizeBuffName } from "../utils/buffCatalog";
 import {
   buildConnectedFileEntries,
   loadConnectedHandles,
@@ -108,6 +114,9 @@ function DashboardPage() {
   const [needFilter, setNeedFilter] = useState("needed");
   const [availabilityFilter, setAvailabilityFilter] = useState("any");
   const [sortBy, setSortBy] = useState("raids");
+  const [buffReadinessClassFilter, setBuffReadinessClassFilter] = useState("all");
+  const [buffReadinessRowFilter, setBuffReadinessRowFilter] = useState("all");
+  const [buffChipVisibility, setBuffChipVisibility] = useState("all");
   const [cooldownAlerts, setCooldownAlerts] = useState([]);
   const previousLockedRaidsRef = useRef(null);
 
@@ -156,6 +165,72 @@ function DashboardPage() {
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
   }, [visibleCharacters, accountNameById]);
+
+  const buffReadinessRows = useMemo(() => {
+    return visibleCharacters
+      .map((character) => {
+        const matchingProfiles = data.buffProfiles.filter(
+          (profile) => profile.className === "All" || profile.className === character.class
+        );
+        const required = new Set(
+          matchingProfiles.flatMap((profile) => Array.isArray(profile.buffs) ? profile.buffs : [])
+        );
+        const requiredBuffs = [...required].sort((a, b) => a.localeCompare(b));
+        const activeBuffs = Array.isArray(character.buffs) ? character.buffs : [];
+        const boonedBuffs = Array.isArray(character.storedBuffs) ? character.storedBuffs : [];
+        const activeSet = new Set(activeBuffs.map(normalizeBuffName).filter(Boolean));
+        const boonedSet = new Set(boonedBuffs.map(normalizeBuffName).filter(Boolean));
+        const allBuffs = getCharacterBuffSet(character);
+        const missingBuffs = requiredBuffs.filter((buff) => !allBuffs.has(String(buff).trim().toLowerCase()));
+        const buffStatuses = requiredBuffs.map((buff) => {
+          const key = normalizeBuffName(buff);
+          if (activeSet.has(key)) {
+            return { name: buff, status: "active" };
+          }
+          if (boonedSet.has(key)) {
+            return { name: buff, status: "booned" };
+          }
+          return { name: buff, status: "missing" };
+        });
+
+        return {
+          characterId: character.id,
+          characterName: character.name,
+          className: character.class,
+          requiredBuffs,
+          activeBuffs,
+          boonedBuffs,
+          missingBuffs,
+          buffStatuses,
+          readyCount: requiredBuffs.length - missingBuffs.length
+        };
+      })
+      .filter((row) => row.requiredBuffs.length)
+      .sort((a, b) => a.missingBuffs.length - b.missingBuffs.length || a.characterName.localeCompare(b.characterName));
+  }, [visibleCharacters, data.buffProfiles]);
+
+  const buffReadinessClassOptions = useMemo(
+    () => Array.from(new Set(buffReadinessRows.map((row) => row.className).filter(Boolean))).sort(),
+    [buffReadinessRows]
+  );
+
+  const filteredBuffReadinessRows = useMemo(() => {
+    return buffReadinessRows.filter((row) => {
+      if (buffReadinessClassFilter !== "all" && row.className !== buffReadinessClassFilter) {
+        return false;
+      }
+
+      if (buffReadinessRowFilter === "missing" && row.missingBuffs.length === 0) {
+        return false;
+      }
+
+      if (buffReadinessRowFilter === "ready" && row.missingBuffs.length > 0) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [buffReadinessRows, buffReadinessClassFilter, buffReadinessRowFilter]);
 
   const hydrateConnectedFiles = useCallback(() => {
     loadConnectedHandles()
@@ -391,6 +466,7 @@ function DashboardPage() {
       const parsedCharacters = [];
       const parsed = [];
       const activeRaids = [];
+      const parsedWorldBuffStates = [];
 
       for (const source of luaTexts) {
         const sourceAccount = (source.accountHintName || accountHintName || "").trim();
@@ -410,6 +486,20 @@ function DashboardPage() {
           accountId: sourceAccountId
         }));
         parsedCharacters.push(...parsedFromSource);
+        const worldBuffStates = parseNovaWorldBuffs(source.text).map((entry) => ({
+          ...entry,
+          accountId: sourceAccountId
+        }));
+        parsedWorldBuffStates.push(...worldBuffStates);
+        parsedCharacters.push(...worldBuffStates.map((entry) => ({
+          name: entry.name,
+          realm: entry.realm,
+          className: entry.className || "Unknown",
+          faction: entry.faction || "Unknown",
+          level: typeof entry.level === "number" ? entry.level : null,
+          restedXp: null,
+          accountId: sourceAccountId
+        })));
         parsed.push(...parseNovaSavedInstances(source.text));
         activeRaids.push(...parseNovaActiveInstances(source.text));
       }
@@ -514,6 +604,64 @@ function DashboardPage() {
       });
 
       await Promise.all(updates);
+
+      const worldBuffStateByCharacter = new Map();
+      parsedWorldBuffStates.forEach((entry) => {
+        const key = characterKey(entry.name, entry.realm);
+        const existing = worldBuffStateByCharacter.get(key);
+
+        if (!existing) {
+          worldBuffStateByCharacter.set(key, {
+            buffs: new Set(entry.buffs || []),
+            storedBuffs: new Set(entry.storedBuffs || []),
+            chronoCount: entry.chronoCount || 0,
+            onyCount: entry.onyCount || 0,
+            nefCount: entry.nefCount || 0,
+            rendCount: entry.rendCount || 0,
+            zanCount: entry.zanCount || 0,
+            dmfCount: entry.dmfCount || 0
+          });
+          return;
+        }
+
+        (entry.buffs || []).forEach((buff) => existing.buffs.add(buff));
+        (entry.storedBuffs || []).forEach((buff) => existing.storedBuffs.add(buff));
+        existing.chronoCount = Math.max(existing.chronoCount || 0, entry.chronoCount || 0);
+        existing.onyCount = Math.max(existing.onyCount || 0, entry.onyCount || 0);
+        existing.nefCount = Math.max(existing.nefCount || 0, entry.nefCount || 0);
+        existing.rendCount = Math.max(existing.rendCount || 0, entry.rendCount || 0);
+        existing.zanCount = Math.max(existing.zanCount || 0, entry.zanCount || 0);
+        existing.dmfCount = Math.max(existing.dmfCount || 0, entry.dmfCount || 0);
+      });
+
+      const buffUpdateOps = [];
+      allCharacters.forEach((character) => {
+        const key = characterKey(character.name, character.realm);
+        const buffState = worldBuffStateByCharacter.get(key);
+        if (!buffState) {
+          return;
+        }
+
+        buffUpdateOps.push(
+          updateCharacter(character.id, {
+            buffs: [...buffState.buffs].sort((a, b) => a.localeCompare(b)),
+            storedBuffs: [...buffState.storedBuffs].sort((a, b) => a.localeCompare(b)),
+            chronoCount: buffState.chronoCount || 0,
+            buffCounts: {
+              ony: buffState.onyCount || 0,
+              nef: buffState.nefCount || 0,
+              rend: buffState.rendCount || 0,
+              zan: buffState.zanCount || 0,
+              dmf: buffState.dmfCount || 0
+            },
+            lastBuffSyncAt: new Date().toISOString()
+          })
+        );
+      });
+
+      if (buffUpdateOps.length) {
+        await Promise.all(buffUpdateOps);
+      }
 
       const stamp = new Date().toLocaleTimeString();
       const currentRaidNames = Array.from(new Set(activeRaids.map((entry) => entry.raidName)));
@@ -824,6 +972,76 @@ function DashboardPage() {
             <li>No connected files yet. Use Settings to connect Nova files first.</li>
           )}
         </ul>
+      </div>
+
+      <div className="panel">
+        <h3>Buff Readiness</h3>
+        <p className="subtitle">Uses Buff Profiles and data synced from NovaWorldBuffs/NIT files.</p>
+        {buffReadinessRows.length ? (
+          <>
+            <div className="buff-readiness-filters">
+              <select
+                value={buffReadinessClassFilter}
+                onChange={(event) => setBuffReadinessClassFilter(event.target.value)}
+              >
+                <option value="all">All classes</option>
+                {buffReadinessClassOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={buffReadinessRowFilter}
+                onChange={(event) => setBuffReadinessRowFilter(event.target.value)}
+              >
+                <option value="all">All readiness</option>
+                <option value="missing">Missing buffs</option>
+                <option value="ready">Fully ready</option>
+              </select>
+              <select
+                value={buffChipVisibility}
+                onChange={(event) => setBuffChipVisibility(event.target.value)}
+              >
+                <option value="all">Show all chips</option>
+                <option value="issues">Show booned + missing</option>
+              </select>
+            </div>
+          <ul className="simple-list buff-readiness-list">
+            {filteredBuffReadinessRows.length ? (
+              filteredBuffReadinessRows.map((row) => {
+                const visibleBuffStatuses =
+                  buffChipVisibility === "issues"
+                    ? row.buffStatuses.filter((buff) => buff.status !== "active")
+                    : row.buffStatuses;
+
+                return (
+                  <li key={row.characterId} className="buff-readiness-item">
+                    <div>
+                      <strong>{row.characterName}</strong> ({row.className}) - {row.readyCount}/{row.requiredBuffs.length} ready
+                    </div>
+                    {visibleBuffStatuses.length ? (
+                      <div className="buff-chip-row">
+                        {visibleBuffStatuses.map((buff) => (
+                          <span key={`${row.characterId}-${buff.name}`} className={`buff-chip ${buff.status}`}>
+                            {buff.name} - {buff.status === "active" ? "Active" : buff.status === "booned" ? "Booned" : "Missing"}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="subtitle">All required buffs are active.</span>
+                    )}
+                  </li>
+                );
+              })
+            ) : (
+              <li>No characters match the selected readiness filters.</li>
+            )}
+          </ul>
+          </>
+        ) : (
+          <p className="empty-panel">Create Buff Profiles to start tracking class buff readiness.</p>
+        )}
       </div>
 
       <div className="dashboard-filters">

@@ -2,21 +2,30 @@ function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeLoose(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function normalizeItemKey(value) {
-  return normalize(value)
+  return normalizeLoose(value)
     .replace(/[’']/g, "")
     .replace(/\s+/g, " ");
 }
 
-function isCharacterMatch(inventoryItem, character) {
-  const itemName = normalize(inventoryItem.characterName);
-  const charName = normalize(character.name);
+function isCharacterMatch(inventoryItem, character, { loose = false } = {}) {
+  const toNorm = loose ? normalizeLoose : normalize;
+  const itemName = toNorm(inventoryItem.characterName);
+  const charName = toNorm(character.name);
   if (!itemName || !charName || itemName !== charName) {
     return false;
   }
 
-  const itemRealm = normalize(inventoryItem.realm);
-  const charRealm = normalize(character.realm);
+  const itemRealm = toNorm(inventoryItem.realm);
+  const charRealm = toNorm(character.realm);
 
   // Some imports (especially Bagnon-style) may not include realm details.
   // If either side is blank, fall back to character-name matching.
@@ -58,7 +67,10 @@ export function computeShoppingNeeds(character, profiles, inventoryItems) {
   // Sum what this character actually has across all bags and bank.
   // Prefer name matching, but also reconcile through itemId to include stacks
   // that arrived with incomplete/unknown names in SavedVariables parsing.
-  const characterItems = inventoryItems.filter((item) => isCharacterMatch(item, character));
+  const exactCharacterItems = inventoryItems.filter((item) => isCharacterMatch(item, character));
+  const characterItems = exactCharacterItems.length
+    ? exactCharacterItems
+    : inventoryItems.filter((item) => isCharacterMatch(item, character, { loose: true }));
   const haveCountsByName = new Map();
   const haveCountsByItemId = new Map();
   const itemIdsByName = new Map();
