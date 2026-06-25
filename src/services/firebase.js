@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -15,7 +15,13 @@ const hasFirebaseConfig = Object.values(firebaseConfig).every(Boolean);
 
 const app = hasFirebaseConfig ? initializeApp(firebaseConfig) : null;
 const auth = app ? getAuth(app) : null;
-const db = app ? getFirestore(app) : null;
+const db = app
+  ? initializeFirestore(app, {
+    // Improves reliability on browsers/networks where Firestore WebChannel streaming is unstable.
+    experimentalAutoDetectLongPolling: true,
+    useFetchStreams: false
+  })
+  : null;
 const googleProvider = auth ? new GoogleAuthProvider() : null;
 
 export { app, auth, db, googleProvider, hasFirebaseConfig };
