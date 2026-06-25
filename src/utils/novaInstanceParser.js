@@ -17,6 +17,33 @@ const RAID_NAME_MAP = {
 
 const ALLIANCE_RACES = new Set(["Human", "Dwarf", "NightElf", "Gnome"]);
 const HORDE_RACES = new Set(["Orc", "Undead", "Scourge", "Tauren", "Troll"]);
+const WORLD_BUFF_NAME_MAP = {
+  "rallying cry of the dragonslayer": "Rallying Cry of the Dragonslayer",
+  rallying: "Rallying Cry of the Dragonslayer",
+  ony: "Rallying Cry of the Dragonslayer",
+  nef: "Rallying Cry of the Dragonslayer",
+  "warchief's blessing": "Warchief's Blessing",
+  wcb: "Warchief's Blessing",
+  rend: "Warchief's Blessing",
+  "spirit of zandalar": "Spirit of Zandalar",
+  zandalar: "Spirit of Zandalar",
+  zg: "Spirit of Zandalar",
+  zan: "Spirit of Zandalar",
+  "sayge's dark fortune of damage": "Sayge's Dark Fortune of Damage",
+  "sayges dark fortune of damage": "Sayge's Dark Fortune of Damage",
+  dmf: "Sayge's Dark Fortune of Damage",
+  "songflower serenade": "Songflower Serenade",
+  songflower: "Songflower Serenade",
+  "fengus' ferocity": "Fengus' Ferocity",
+  "fengus ferocity": "Fengus' Ferocity",
+  fengus: "Fengus' Ferocity",
+  "mol'dar's moxie": "Mol'dar's Moxie",
+  "moldar's moxie": "Mol'dar's Moxie",
+  moldar: "Mol'dar's Moxie",
+  "slip'kik's savvy": "Slip'kik's Savvy",
+  "slipkik's savvy": "Slip'kik's Savvy",
+  slipkik: "Slip'kik's Savvy"
+};
 
 function normalizeRaidName(name) {
   const rawName = String(name || "").trim();
@@ -244,6 +271,16 @@ function inferFaction(raceEnglish) {
   return "Unknown";
 }
 
+function normalizeWorldBuffName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const compact = raw.toLowerCase();
+  return WORLD_BUFF_NAME_MAP[compact] || raw;
+}
+
 export function parseNovaCharacters(luaText) {
   const lines = luaText.split(/\r?\n/);
   const stack = [];
@@ -367,6 +404,19 @@ export function parseNovaWorldBuffs(luaText) {
   const popContext = () => {
     const ctx = stack.pop();
     if (ctx?.kind === "char") {
+      if (ctx.onyCount > 0 || ctx.nefCount > 0) {
+        ctx.storedBuffs.add("Rallying Cry of the Dragonslayer");
+      }
+      if (ctx.rendCount > 0) {
+        ctx.storedBuffs.add("Warchief's Blessing");
+      }
+      if (ctx.zanCount > 0) {
+        ctx.storedBuffs.add("Spirit of Zandalar");
+      }
+      if (ctx.dmfCount > 0) {
+        ctx.storedBuffs.add("Sayge's Dark Fortune of Damage");
+      }
+
       results.push({
         name: ctx.name,
         realm: ctx.realm,
@@ -446,10 +496,11 @@ export function parseNovaWorldBuffs(luaText) {
       if (parent?.kind === "buffTable") {
         const charCtx = findNearest((entry) => entry.kind === "char");
         if (charCtx) {
+          const buffName = normalizeWorldBuffName(key);
           if (parent.tableType === "buffs") {
-            charCtx.buffs.add(key);
+            charCtx.buffs.add(buffName);
           } else {
-            charCtx.storedBuffs.add(key);
+            charCtx.storedBuffs.add(buffName);
           }
         }
         pushContext({ kind: "buffEntry", key });
@@ -466,6 +517,19 @@ export function parseNovaWorldBuffs(luaText) {
     }
 
     const charCtx = findNearest((entry) => entry.kind === "char");
+    const buffTableCtx = findNearest((entry) => entry.kind === "buffTable");
+    if (buffTableCtx && charCtx) {
+      const buffValueMatch = trimmed.match(/^\["([^"]+)"\]\s*=\s*(?:true|false|\d+|"[^"]*"),?$/);
+      if (buffValueMatch) {
+        const buffName = normalizeWorldBuffName(buffValueMatch[1]);
+        if (buffTableCtx.tableType === "buffs") {
+          charCtx.buffs.add(buffName);
+        } else {
+          charCtx.storedBuffs.add(buffName);
+        }
+      }
+    }
+
     if (charCtx) {
       const classMatch = trimmed.match(/^\["localizedClass"\]\s*=\s*"([^"]+)",?$/);
       if (classMatch) {
