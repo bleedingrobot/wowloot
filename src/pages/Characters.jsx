@@ -41,8 +41,6 @@ const DEFAULT_SPEC_BY_CLASS = {
 
 const ITEM_ID_PLACEHOLDER_PATTERN = /^item\s*#\d+$/i;
 
-const fetchedItemNameCache = new Map();
-
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -108,59 +106,45 @@ function hasMissingItemName(item) {
   return ITEM_ID_PLACEHOLDER_PATTERN.test(name);
 }
 
-function extractNameFromWowheadXml(xmlText) {
-  const xml = String(xmlText || "");
-  if (!xml) {
-    return "";
-  }
+function buildKnownItemNameMap() {
+  const known = new Map();
 
-  const cdataMatch = xml.match(/<name><!\[CDATA\[(.*?)\]\]><\/name>/i);
-  if (cdataMatch?.[1]) {
-    return String(cdataMatch[1]).trim();
-  }
+  Object.entries(BIS_ITEM_NAME_BY_ID).forEach(([idText, name]) => {
+    const id = Number(idText);
+    const safeName = String(name || "").trim();
+    if (Number.isFinite(id) && id > 0 && safeName) {
+      known.set(id, safeName);
+    }
+  });
 
-  const plainMatch = xml.match(/<name>(.*?)<\/name>/i);
-  if (plainMatch?.[1]) {
-    return String(plainMatch[1]).trim();
-  }
+  Object.values(BIS_ITEM_IDS_BY_SPEC).forEach((slots) => {
+    if (!slots || typeof slots !== "object") {
+      return;
+    }
 
-  return "";
+    Object.values(slots).forEach((entries) => {
+      if (!Array.isArray(entries)) {
+        return;
+      }
+
+      entries.forEach((entry) => {
+        if (!entry || typeof entry !== "object") {
+          return;
+        }
+
+        const id = Number(entry.itemId);
+        const safeName = String(entry.itemName || "").trim();
+        if (Number.isFinite(id) && id > 0 && safeName && !known.has(id)) {
+          known.set(id, safeName);
+        }
+      });
+    });
+  });
+
+  return known;
 }
 
-async function fetchWowheadItemName(itemId) {
-  const id = Number(itemId);
-  if (!Number.isFinite(id) || id <= 0) {
-    return "";
-  }
-
-  if (fetchedItemNameCache.has(id)) {
-    return fetchedItemNameCache.get(id) || "";
-  }
-
-  try {
-    const response = await fetch(`https://nether.wowhead.com/classic/tooltip/item/${id}`);
-    if (!response.ok) {
-      return "";
-    }
-
-    const data = await response.json();
-    const name = String(data?.name || "").trim();
-    if (name) {
-      fetchedItemNameCache.set(id, name);
-      return name;
-    }
-
-    const tooltipName = extractNameFromWowheadXml(String(data?.tooltip || ""));
-    if (tooltipName) {
-      fetchedItemNameCache.set(id, tooltipName);
-      return tooltipName;
-    }
-  } catch {
-    return "";
-  }
-
-  return "";
-}
+const KNOWN_ITEM_NAME_BY_ID = buildKnownItemNameMap();
 
 function getBisItemNameById(itemId) {
   const id = Number(itemId);
@@ -455,15 +439,9 @@ function CharactersPage() {
       const resolvedNameById = new Map();
 
       for (const id of missingIds) {
-        const knownName = BIS_ITEM_NAME_BY_ID[id];
+        const knownName = KNOWN_ITEM_NAME_BY_ID.get(id) || BIS_ITEM_NAME_BY_ID[id];
         if (knownName) {
           resolvedNameById.set(id, knownName);
-          continue;
-        }
-
-        const fetchedName = await fetchWowheadItemName(id);
-        if (fetchedName) {
-          resolvedNameById.set(id, fetchedName);
         }
       }
 
@@ -492,7 +470,7 @@ function CharactersPage() {
 
       if (!fixedCount) {
         setResolveItemNamesMessage(
-          `Could not resolve ${missingIds.length} missing item name(s) right now. Try again later.`
+          `Could not resolve ${missingIds.length} missing item name(s) from local data yet. Sync DataStore files again or add IDs to bisItemNames.`
         );
         return;
       }
