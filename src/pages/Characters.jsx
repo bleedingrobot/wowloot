@@ -244,7 +244,9 @@ function CharactersPage() {
       const normalizedBisIds = normalizedBisItems.map((item) => item.itemId);
 
       const equippedId = Number(equipped?.itemId || 0);
-      const isBis = equippedId > 0 && normalizedBisIds.includes(equippedId);
+      const primaryBisId = normalizedBisIds[0] || 0;
+      const isBis = equippedId > 0 && primaryBisId > 0 && equippedId === primaryBisId;
+      const isAltOption = !isBis && equippedId > 0 && normalizedBisIds.slice(1).includes(equippedId);
 
       rows.push({
         slot,
@@ -252,6 +254,7 @@ function CharactersPage() {
         equipped,
         bisItemIds: normalizedBisIds,
         bisItems: normalizedBisItems,
+        isAltOption,
         status: isBis ? "bis" : equipped ? "upgrade" : "missing"
       });
     });
@@ -492,6 +495,7 @@ function CharactersPage() {
                                       </span>
                                     ))}
                                     {row.bisItems.length > topBisItems.length ? " + more" : ""}
+                                    {row.isAltOption ? " (alt equipped)" : ""}
                                   </span>
                                 )
                                 : "No recommendation"}
