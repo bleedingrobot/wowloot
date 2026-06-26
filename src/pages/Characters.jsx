@@ -35,6 +35,10 @@ const SLOT_LABELS = {
   19: "Tabard"
 };
 
+const DEFAULT_SPEC_BY_CLASS = {
+  Paladin: "paladin-holy-p6"
+};
+
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -71,7 +75,19 @@ function getQualityClass(quality) {
 
 function getItemName(item) {
   const name = String(item?.itemName || "").trim();
-  return name || (item?.itemId ? `Item #${item.itemId}` : "Empty");
+  const itemId = Number(item?.itemId || 0);
+  const hasValidId = Number.isFinite(itemId) && itemId > 0;
+  const isIdPlaceholder = /^item\s*#\d+$/i.test(name);
+
+  if (name && !isIdPlaceholder) {
+    return name;
+  }
+
+  if (hasValidId) {
+    return BIS_ITEM_NAME_BY_ID[itemId] || `Item #${itemId}`;
+  }
+
+  return "Empty";
 }
 
 function getBisItemNameById(itemId) {
@@ -215,6 +231,12 @@ function CharactersPage() {
     const currentSpec = String(selectedCharacter.bisSpec || "");
     if (currentSpec && selectedSpecOptions.some((option) => option.key === currentSpec)) {
       setSelectedSpecKey(currentSpec);
+      return;
+    }
+
+    const classDefault = DEFAULT_SPEC_BY_CLASS[selectedCharacter.class];
+    if (classDefault && selectedSpecOptions.some((option) => option.key === classDefault)) {
+      setSelectedSpecKey(classDefault);
       return;
     }
 
