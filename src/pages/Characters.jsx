@@ -67,6 +67,14 @@ function getItemName(item) {
   return name || (item?.itemId ? `Item #${item.itemId}` : "Empty");
 }
 
+function buildWowheadItemUrl(itemId) {
+  const id = Number(itemId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return "";
+  }
+  return `https://www.wowhead.com/classic/item=${id}`;
+}
+
 function CharactersPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
@@ -184,7 +192,16 @@ function CharactersPage() {
     return (
       <li key={slotId} className={`character-slot ${getQualityClass(item.quality)}`}>
         <span className="character-slot-label">{slotLabel}</span>
-        <span className="character-slot-item">{getItemName(item)}</span>
+        <span className="character-slot-item">
+          <a
+            href={buildWowheadItemUrl(item.itemId)}
+            target="_blank"
+            rel="noreferrer"
+            data-wowhead={`item=${item.itemId}`}
+          >
+            {getItemName(item)}
+          </a>
+        </span>
       </li>
     );
   };
