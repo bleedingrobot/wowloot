@@ -92,14 +92,14 @@ function getItemName(item) {
   const name = String(item?.itemName || "").trim();
   const itemId = Number(item?.itemId || 0);
   const hasValidId = Number.isFinite(itemId) && itemId > 0;
-  const isIdPlaceholder = /^item\s*#\d+$/i.test(name);
+  const isIdPlaceholder = ITEM_ID_PLACEHOLDER_PATTERN.test(name);
 
   if (name && !isIdPlaceholder) {
     return name;
   }
 
   if (hasValidId) {
-    return BIS_ITEM_NAME_BY_ID[itemId] || `Item #${itemId}`;
+    return KNOWN_ITEM_NAME_BY_ID.get(itemId) || BIS_ITEM_NAME_BY_ID[itemId] || `Item #${itemId}`;
   }
 
   return "Empty";
@@ -164,7 +164,7 @@ function getBisItemNameById(itemId) {
   if (!Number.isFinite(id) || id <= 0) {
     return "Unknown Item";
   }
-  return BIS_ITEM_NAME_BY_ID[id] || `Item #${id}`;
+  return KNOWN_ITEM_NAME_BY_ID.get(id) || BIS_ITEM_NAME_BY_ID[id] || `Item #${id}`;
 }
 
 function normalizeBisItems(bisEntry) {
