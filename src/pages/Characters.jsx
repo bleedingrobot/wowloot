@@ -76,10 +76,6 @@ function CharactersPage() {
   const [realmFilter, setRealmFilter] = useState("all");
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
 
-  if (!user) {
-    return <p className="empty-panel">Sign in to view character armory details.</p>;
-  }
-
   const classOptions = useMemo(
     () => Array.from(new Set(data.characters.map((character) => character.class).filter(Boolean))).sort(),
     [data.characters]
@@ -193,12 +189,16 @@ function CharactersPage() {
     );
   };
 
+  if (!user) {
+    return <p className="empty-panel">Sign in to view character armory details.</p>;
+  }
+
   return (
     <section className="split-grid character-armory-layout">
       <article className="panel character-list-panel">
         <h2>Character Armory</h2>
         <p className="subtitle">Character data is import-driven from Nova + DataStore files.</p>
-        <div className="dashboard-filters character-filters">
+        <div className="character-filters">
           <input
             value={searchTerm}
             onChange={(event) => setSearchTerm(event.target.value)}
@@ -280,6 +280,18 @@ function CharactersPage() {
               </div>
             </header>
 
+            <section className="panel character-equipment-panel">
+              <h3>Equipped Items</h3>
+              <div className="character-equipment-grid">
+                <ul className="character-slot-column">
+                  {EQUIPMENT_LEFT_SLOTS.map((slotId) => renderSlot(slotId))}
+                </ul>
+                <ul className="character-slot-column">
+                  {EQUIPMENT_RIGHT_SLOTS.map((slotId) => renderSlot(slotId))}
+                </ul>
+              </div>
+            </section>
+
             <section className="split-grid character-summary-grid">
               <article className="panel">
                 <h3>Profile</h3>
@@ -302,18 +314,6 @@ function CharactersPage() {
                   <li><span>Overall iLvl</span><strong>{typeof selectedCharacter.overallItemLevel === "number" ? selectedCharacter.overallItemLevel.toFixed(1) : "-"}</strong></li>
                 </ul>
               </article>
-            </section>
-
-            <section className="panel character-equipment-panel">
-              <h3>Equipped Items</h3>
-              <div className="character-equipment-grid">
-                <ul className="character-slot-column">
-                  {EQUIPMENT_LEFT_SLOTS.map((slotId) => renderSlot(slotId))}
-                </ul>
-                <ul className="character-slot-column">
-                  {EQUIPMENT_RIGHT_SLOTS.map((slotId) => renderSlot(slotId))}
-                </ul>
-              </div>
             </section>
 
             <section className="split-grid character-extra-grid">
