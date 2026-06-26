@@ -9,6 +9,7 @@ import {
   BIS_ITEM_IDS_BY_SPEC,
   SPEC_OPTIONS_BY_CLASS
 } from "../data/bisLists";
+import { BIS_ITEM_NAME_BY_ID } from "../data/bisItemNames";
 
 const EQUIPMENT_LEFT_SLOTS = [1, 2, 3, 5, 9, 10, 6, 7, 8];
 const EQUIPMENT_RIGHT_SLOTS = [11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -71,6 +72,14 @@ function getQualityClass(quality) {
 function getItemName(item) {
   const name = String(item?.itemName || "").trim();
   return name || (item?.itemId ? `Item #${item.itemId}` : "Empty");
+}
+
+function getBisItemNameById(itemId) {
+  const id = Number(itemId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return "Unknown Item";
+  }
+  return BIS_ITEM_NAME_BY_ID[id] || `Item #${id}`;
 }
 
 function buildWowheadItemUrl(itemId) {
@@ -211,6 +220,10 @@ function CharactersPage() {
         slotName: SLOT_LABELS[slot] || `Slot ${slot}`,
         equipped,
         bisItemIds: normalizedBisIds,
+        bisItems: normalizedBisIds.map((itemId) => ({
+          itemId,
+          name: getBisItemNameById(itemId)
+        })),
         status: isBis ? "bis" : equipped ? "upgrade" : "missing"
       });
     });
@@ -412,7 +425,7 @@ function CharactersPage() {
                 selectedBisBySlot ? (
                   <ul className="simple-list bis-upgrade-list">
                     {bisUpgradeRows.map((row) => {
-                      const firstBisItemId = row.bisItemIds[0] || null;
+                      const topBisItems = row.bisItems.slice(0, 3);
                       return (
                         <li key={row.slot} className={`bis-upgrade-item ${row.status}`}>
                           <span>
@@ -434,16 +447,24 @@ function CharactersPage() {
                           <span>
                             {row.status === "bis"
                               ? "BiS"
-                              : firstBisItemId
+                              : topBisItems.length
                                 ? (
-                                  <a
-                                    href={buildWowheadItemUrl(firstBisItemId)}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    data-wowhead={`item=${firstBisItemId}`}
-                                  >
-                                    Suggested upgrade
-                                  </a>
+                                  <span className="bis-item-options">
+                                    {topBisItems.map((item, index) => (
+                                      <span key={item.itemId}>
+                                        {index ? ", " : ""}
+                                        <a
+                                          href={buildWowheadItemUrl(item.itemId)}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          data-wowhead={`item=${item.itemId}`}
+                                        >
+                                          {item.name}
+                                        </a>
+                                      </span>
+                                    ))}
+                                    {row.bisItems.length > topBisItems.length ? " + more" : ""}
+                                  </span>
                                 )
                                 : "No recommendation"}
                           </span>

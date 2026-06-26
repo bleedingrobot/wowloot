@@ -235,6 +235,12 @@ p {
   text-align: right;
 }
 
+.bis-item-options {
+  display: inline-block;
+  max-width: 420px;
+  line-height: 1.35;
+}
+
 .bis-upgrade-item a {
   color: var(--brand);
   text-decoration: none;
