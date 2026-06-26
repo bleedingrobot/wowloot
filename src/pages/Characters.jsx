@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useUserCollections } from "../hooks/useUserCollections";
+import { updateCharacter } from "../services/dataService";
 import { getClassIcon } from "../utils/classIcons";
 import { getCharacterBuffSet } from "../utils/buffCatalog";
+import {
+  BIS_GUIDE_URL_BY_SPEC,
+  BIS_ITEM_IDS_BY_SPEC,
+  SPEC_OPTIONS_BY_CLASS
+} from "../data/bisLists";
 
 const EQUIPMENT_LEFT_SLOTS = [1, 2, 3, 5, 9, 10, 6, 7, 8];
 const EQUIPMENT_RIGHT_SLOTS = [11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -83,6 +89,8 @@ function CharactersPage() {
   const [factionFilter, setFactionFilter] = useState("all");
   const [realmFilter, setRealmFilter] = useState("all");
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
+  const [showBisUpgrades, setShowBisUpgrades] = useState(false);
+  const [selectedSpecKey, setSelectedSpecKey] = useState("");
 
   const classOptions = useMemo(
     () => Array.from(new Set(data.characters.map((character) => character.class).filter(Boolean))).sort(),
@@ -150,6 +158,66 @@ function CharactersPage() {
     return map;
   }, [selectedCharacter]);
 
+  const selectedSpecOptions = useMemo(() => {
+    if (!selectedCharacter?.class) {
+      return [];
+    }
+    return SPEC_OPTIONS_BY_CLASS[selectedCharacter.class] || [];
+  }, [selectedCharacter]);
+
+  useEffect(() => {
+    if (!selectedCharacter) {
+      setSelectedSpecKey("");
+      return;
+    }
+
+    const currentSpec = String(selectedCharacter.bisSpec || "");
+    if (currentSpec && selectedSpecOptions.some((option) => option.key === currentSpec)) {
+      setSelectedSpecKey(currentSpec);
+      return;
+    }
+
+    setSelectedSpecKey(selectedSpecOptions[0]?.key || "");
+  }, [selectedCharacter, selectedSpecOptions]);
+
+  const selectedGuideUrl = useMemo(
+    () => BIS_GUIDE_URL_BY_SPEC[selectedSpecKey] || "",
+    [selectedSpecKey]
+  );
+
+  const selectedBisBySlot = useMemo(
+    () => BIS_ITEM_IDS_BY_SPEC[selectedSpecKey] || null,
+    [selectedSpecKey]
+  );
+
+  const bisUpgradeRows = useMemo(() => {
+    if (!selectedBisBySlot) {
+      return [];
+    }
+
+    const rows = [];
+    Object.entries(selectedBisBySlot).forEach(([slotText, bisItemIds]) => {
+      const slot = Number(slotText);
+      const equipped = selectedEquipmentBySlot.get(slot) || null;
+      const normalizedBisIds = Array.isArray(bisItemIds)
+        ? bisItemIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
+        : [];
+
+      const equippedId = Number(equipped?.itemId || 0);
+      const isBis = equippedId > 0 && normalizedBisIds.includes(equippedId);
+
+      rows.push({
+        slot,
+        slotName: SLOT_LABELS[slot] || `Slot ${slot}`,
+        equipped,
+        bisItemIds: normalizedBisIds,
+        status: isBis ? "bis" : equipped ? "upgrade" : "missing"
+      });
+    });
+
+    return rows.sort((a, b) => a.slot - b.slot);
+  }, [selectedBisBySlot, selectedEquipmentBySlot]);
+
   const selectedLockouts = useMemo(() => {
     if (!selectedCharacter) {
       return [];
@@ -204,6 +272,19 @@ function CharactersPage() {
         </span>
       </li>
     );
+  };
+
+  const onBisSpecChange = async (nextSpec) => {
+    setSelectedSpecKey(nextSpec);
+    if (!selectedCharacter?.id) {
+      return;
+    }
+
+    try {
+      await updateCharacter(selectedCharacter.id, { bisSpec: nextSpec });
+    } catch {
+      // Keep UI responsive even if save fails; sync will retry later.
+    }
   };
 
   if (!user) {
@@ -296,6 +377,85 @@ function CharactersPage() {
                 </p>
               </div>
             </header>
+
+            <section className="panel bis-control-panel">
+              <div className="row-actions bis-controls-row">
+                <label className="saved-toggle">
+                  <input
+                    type="checkbox"
+                    checked={showBisUpgrades}
+                    onChange={(event) => setShowBisUpgrades(event.target.checked)}
+                  />
+                  Show BiS upgrades
+                </label>
+                <select
+                  value={selectedSpecKey}
+                  onChange={(event) => onBisSpecChange(event.target.value)}
+                  disabled={!selectedSpecOptions.length}
+                >
+                  {selectedSpecOptions.length ? (
+                    selectedSpecOptions.map((option) => (
+                      <option key={option.key} value={option.key}>{option.label}</option>
+                    ))
+                  ) : (
+                    <option value="">No spec profile for this class</option>
+                  )}
+                </select>
+                {selectedGuideUrl ? (
+                  <a href={selectedGuideUrl} target="_blank" rel="noreferrer" className="secondary-btn bis-guide-link">
+                    Source Guide
+                  </a>
+                ) : null}
+              </div>
+
+              {showBisUpgrades ? (
+                selectedBisBySlot ? (
+                  <ul className="simple-list bis-upgrade-list">
+                    {bisUpgradeRows.map((row) => {
+                      const firstBisItemId = row.bisItemIds[0] || null;
+                      return (
+                        <li key={row.slot} className={`bis-upgrade-item ${row.status}`}>
+                          <span>
+                            <strong>{row.slotName}</strong>
+                            {": "}
+                            {row.equipped ? (
+                              <a
+                                href={buildWowheadItemUrl(row.equipped.itemId)}
+                                target="_blank"
+                                rel="noreferrer"
+                                data-wowhead={`item=${row.equipped.itemId}`}
+                              >
+                                {getItemName(row.equipped)}
+                              </a>
+                            ) : (
+                              "Empty"
+                            )}
+                          </span>
+                          <span>
+                            {row.status === "bis"
+                              ? "BiS"
+                              : firstBisItemId
+                                ? (
+                                  <a
+                                    href={buildWowheadItemUrl(firstBisItemId)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    data-wowhead={`item=${firstBisItemId}`}
+                                  >
+                                    Suggested upgrade
+                                  </a>
+                                )
+                                : "No recommendation"}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="subtitle">BiS mapping for this spec is not populated yet. Guide link is ready for curation.</p>
+                )
+              ) : null}
+            </section>
 
             <section className="panel character-equipment-panel">
               <h3>Equipped Items</h3>

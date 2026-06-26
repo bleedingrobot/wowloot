@@ -196,6 +196,54 @@ p {
   gap: 0.9rem;
 }
 
+.bis-controls-row {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.bis-controls-row select {
+  min-width: 220px;
+}
+
+.bis-guide-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+}
+
+.bis-upgrade-list {
+  margin-top: 0.7rem;
+}
+
+.bis-upgrade-item {
+  align-items: center;
+}
+
+.bis-upgrade-item.bis {
+  border-color: rgba(99, 230, 190, 0.45);
+  background: rgba(99, 230, 190, 0.08);
+}
+
+.bis-upgrade-item.upgrade,
+.bis-upgrade-item.missing {
+  border-color: rgba(245, 200, 91, 0.4);
+  background: rgba(245, 200, 91, 0.08);
+}
+
+.bis-upgrade-item span:last-child {
+  text-align: right;
+}
+
+.bis-upgrade-item a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.bis-upgrade-item a:hover {
+  text-decoration: underline;
+}
+
 .card-header {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -722,6 +770,15 @@ button.danger {
 
   .character-equipment-grid {
     grid-template-columns: 1fr;
+  }
+
+  .bis-controls-row {
+    justify-content: flex-start;
+  }
+
+  .bis-controls-row select {
+    width: 100%;
+    min-width: 0;
   }
 }
 
