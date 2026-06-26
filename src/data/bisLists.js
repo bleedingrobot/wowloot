@@ -310,71 +310,179 @@ export const BIS_ITEM_IDS_BY_SPEC = {
     18: [22820, 22821, 21603, 19861, 13396]
   },
   "warrior-fury-p6": {
-    1: [{ itemId: 19372, itemName: "Helm of Endless Rage" }],
-    2: [{ itemId: 23053, itemName: "Stormrage's Talisman of Seething" }],
-    3: [{ itemId: 21330, itemName: "Conqueror's Spaulders" }],
-    5: [{ itemId: 23000, itemName: "Plated Abomination Ribcage" }],
-    6: [{ itemId: 23219, itemName: "Girdle of the Mentor" }],
-    7: [{ itemId: 23068, itemName: "Legplates of Carnage" }],
+    1: [
+      { itemId: 12640, itemName: "Lionheart Helm" },
+      { itemId: 19372, itemName: "Helm of Endless Rage" },
+      { itemId: 21329, itemName: "Conqueror's Crown" },
+      { itemId: 21455, itemName: "Southwind Helm" },
+      { itemId: 18817, itemName: "Crown of Destruction" },
+      { itemId: 16478, itemName: "Field Marshal's Plate Helm" },
+      { itemId: 16542, itemName: "Warlord's Plate Headpiece" },
+      { itemId: 19945, itemName: "Lizardscale Eyepatch" },
+      { itemId: 23314, itemName: "Lieutenant Commander's Plate Helm" },
+      { itemId: 23244, itemName: "Champion's Plate Helm" }
+    ],
+    2: [
+      { itemId: 23053, itemName: "Stormrage's Talisman of Seething" },
+      { itemId: 21664, itemName: "Barbed Choker" },
+      { itemId: 19856, itemName: "The Eye of Hakkar" },
+      { itemId: 18404, itemName: "Onyxia Tooth Pendant" },
+      { itemId: 21809, itemName: "Fury of the Forgotten Swarm" }
+    ],
+    3: [
+      { itemId: 21330, itemName: "Conqueror's Spaulders" },
+      { itemId: 21665, itemName: "Mantle of Wicked Revenge" },
+      { itemId: 16480, itemName: "Field Marshal's Plate Shoulderguards" },
+      { itemId: 16544, itemName: "Warlord's Plate Shoulders" },
+      { itemId: 19394, itemName: "Drake Talon Pauldrons" },
+      { itemId: 23315, itemName: "Lieutenant Commander's Plate Shoulders" },
+      { itemId: 23243, itemName: "Champion's Plate Shoulders" }
+    ],
+    5: [
+      { itemId: 23000, itemName: "Plated Abomination Ribcage" },
+      { itemId: 23226, itemName: "Ghoul Skin Tunic" },
+      { itemId: 21814, itemName: "Breastplate of Annihilation" },
+      { itemId: 21331, itemName: "Conqueror's Breastplate" },
+      { itemId: 21680, itemName: "Vest of Swift Execution" },
+      { itemId: 11726, itemName: "Savage Gladiator Chain" }
+    ],
+    6: [
+      { itemId: 23219, itemName: "Girdle of the Mentor" },
+      { itemId: 19137, itemName: "Onslaught Girdle" },
+      { itemId: 21586, itemName: "Belt of Never-ending Agony" },
+      { itemId: 21692, itemName: "Triad Girdle" },
+      { itemId: 19823, itemName: "Zandalar Vindicator's Belt" }
+    ],
+    7: [
+      { itemId: 23068, itemName: "Legplates of Carnage" },
+      { itemId: 23071, itemName: "Leggings of Apocalypse" },
+      { itemId: 21332, itemName: "Conqueror's Legguards" },
+      { itemId: 22385, itemName: "Titanic Leggings" },
+      { itemId: 16479, itemName: "Marshal's Plate Legguards" },
+      { itemId: 16543, itemName: "General's Plate Leggings" },
+      { itemId: 21651, itemName: "Scaled Sand Reaver Leggings" }
+    ],
     8: [
       { itemId: 19387, itemName: "Chromatic Boots" },
       { itemId: 21493, itemName: "Boots of the Vanguard" },
+      { itemId: 21688, itemName: "Boots of the Fallen Hero" },
+      { itemId: 16483, itemName: "Marshal's Plate Boots" },
+      { itemId: 16545, itemName: "General's Plate Boots" },
       { itemId: 21490, itemName: "Slime Kickers" }
     ],
-    9: [{ itemId: 22936, itemName: "Wristguards of Vengeance" }],
-    10: [{ itemId: 21581, itemName: "Gauntlets of Annihilation" }],
+    9: [
+      { itemId: 22936, itemName: "Wristguards of Vengeance" },
+      { itemId: 21618, itemName: "Hive Defiler Wristguards" },
+      { itemId: 21602, itemName: "Qiraji Execution Bracers" },
+      { itemId: 21457, itemName: "Bracers of Brutality" },
+      { itemId: 21184, itemName: "Deeprock Bracers" }
+    ],
+    10: [
+      { itemId: 21581, itemName: "Gauntlets of Annihilation" },
+      { itemId: 14551, itemName: "Edgemaster's Handguards" },
+      { itemId: 21672, itemName: "Gloves of Enforcement" },
+      { itemId: 22714, itemName: "Sacrificial Gauntlets" }
+    ],
     11: [
       { itemId: 23038, itemName: "Band of Unnatural Forces" },
       { itemId: 18821, itemName: "Quick Strike Ring" },
       { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
       { itemId: 19432, itemName: "Circle of Applied Force" },
-      { itemId: 19384, itemName: "Master Dragonslayer's Ring" }
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" },
+      { itemId: 19325, itemName: "Don Julio's Band" },
+      { itemId: 21182, itemName: "Band of Earthen Might" },
+      { itemId: 21393, itemName: "Signet of Unyielding Strength" },
+      { itemId: 21205, itemName: "Signet Ring of the Bronze Dragonflight" },
+      { itemId: 17063, itemName: "Band of Accuria" }
     ],
     12: [
-      { itemId: 18821, itemName: "Quick Strike Ring" },
       { itemId: 23038, itemName: "Band of Unnatural Forces" },
+      { itemId: 18821, itemName: "Quick Strike Ring" },
       { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
       { itemId: 19432, itemName: "Circle of Applied Force" },
-      { itemId: 19384, itemName: "Master Dragonslayer's Ring" }
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" },
+      { itemId: 19325, itemName: "Don Julio's Band" },
+      { itemId: 21182, itemName: "Band of Earthen Might" },
+      { itemId: 21393, itemName: "Signet of Unyielding Strength" },
+      { itemId: 21205, itemName: "Signet Ring of the Bronze Dragonflight" },
+      { itemId: 17063, itemName: "Band of Accuria" }
     ],
     13: [
       { itemId: 22954, itemName: "Kiss of the Spider" },
       { itemId: 23206, itemName: "Mark of the Champion" },
       { itemId: 23041, itemName: "Slayer's Crest" },
       { itemId: 20130, itemName: "Diamond Flask" },
-      { itemId: 23570, itemName: "Jom Gabbar" }
+      { itemId: 23570, itemName: "Jom Gabbar" },
+      { itemId: 21180, itemName: "Earthstrike" },
+      { itemId: 19406, itemName: "Drake Fang Talisman" },
+      { itemId: 11815, itemName: "Hand of Justice" },
+      { itemId: 21670, itemName: "Badge of the Swarmguard" },
+      { itemId: 21647, itemName: "Fetish of the Sand Reaver" }
     ],
     14: [
-      { itemId: 23206, itemName: "Mark of the Champion" },
       { itemId: 22954, itemName: "Kiss of the Spider" },
+      { itemId: 23206, itemName: "Mark of the Champion" },
       { itemId: 23041, itemName: "Slayer's Crest" },
       { itemId: 20130, itemName: "Diamond Flask" },
-      { itemId: 23570, itemName: "Jom Gabbar" }
+      { itemId: 23570, itemName: "Jom Gabbar" },
+      { itemId: 21180, itemName: "Earthstrike" },
+      { itemId: 19406, itemName: "Drake Fang Talisman" },
+      { itemId: 11815, itemName: "Hand of Justice" },
+      { itemId: 21670, itemName: "Badge of the Swarmguard" },
+      { itemId: 21647, itemName: "Fetish of the Sand Reaver" }
     ],
     15: [
       { itemId: 23045, itemName: "Shroud of Dominion" },
-      { itemId: 21701, itemName: "Cloak of Concentrated Hatred" }
+      { itemId: 21710, itemName: "Cloak of the Fallen God" },
+      { itemId: 19436, itemName: "Cloak of Draconic Might" },
+      { itemId: 21701, itemName: "Cloak of Concentrated Hatred" },
+      { itemId: 21394, itemName: "Drape of Unyielding Strength" },
+      { itemId: 18541, itemName: "Puissant Cape" }
     ],
     16: [
       { itemId: 23054, itemName: "Gressil, Dawn of Ruin" },
       { itemId: 23577, itemName: "The Hungering Cold" },
       { itemId: 22808, itemName: "The Castigator" },
       { itemId: 17112, itemName: "Empyrean Demolisher" },
-      { itemId: 23221, itemName: "Misplaced Servo Arm" }
+      { itemId: 23221, itemName: "Misplaced Servo Arm" },
+      { itemId: 23014, itemName: "Iblis, Blade of the Fallen Seraph" },
+      { itemId: 12584, itemName: "Grand Marshal's Longsword" },
+      { itemId: 19352, itemName: "Chromatically Tempered Sword" },
+      { itemId: 21650, itemName: "Ancient Qiraji Ripper" },
+      { itemId: 22816, itemName: "Hatchet of Sundered Bone" },
+      { itemId: 18828, itemName: "High Warlord's Cleaver" },
+      { itemId: 21242, itemName: "Blessed Qiraji War Axe" },
+      { itemId: 19363, itemName: "Crul'shorukh, Edge of Chaos" },
+      { itemId: 17068, itemName: "Deathbringer" }
     ],
     17: [
       { itemId: 23577, itemName: "The Hungering Cold" },
       { itemId: 22808, itemName: "The Castigator" },
       { itemId: 23014, itemName: "Iblis, Blade of the Fallen Seraph" },
       { itemId: 23456, itemName: "Grand Marshal's Swiftblade" },
-      { itemId: 19352, itemName: "Chromatically Tempered Sword" }
+      { itemId: 19352, itemName: "Chromatically Tempered Sword" },
+      { itemId: 19351, itemName: "Maladath, Runed Blade of the Black Flight" },
+      { itemId: 23221, itemName: "Misplaced Servo Arm" },
+      { itemId: 21837, itemName: "Anubisath Warhammer" },
+      { itemId: 21650, itemName: "Ancient Qiraji Ripper" },
+      { itemId: 18832, itemName: "Brutality Blade" },
+      { itemId: 18828, itemName: "High Warlord's Cleaver" },
+      { itemId: 19363, itemName: "Crul'shorukh, Edge of Chaos" },
+      { itemId: 21242, itemName: "Blessed Qiraji War Axe" },
+      { itemId: 19362, itemName: "Doom's Edge" },
+      { itemId: 19921, itemName: "Zulian Hacker" },
+      { itemId: 21392, itemName: "Sickle of Unyielding Strength" }
     ],
     18: [
       { itemId: 22812, itemName: "Nerubian Slavemaker" },
       { itemId: 22811, itemName: "Soulstring" },
       { itemId: 23557, itemName: "Larvae of the Great Worm" },
       { itemId: 21459, itemName: "Crossbow of Imminent Doom" },
-      { itemId: 17069, itemName: "Striker's Mark" }
+      { itemId: 17069, itemName: "Striker's Mark" },
+      { itemId: 19853, itemName: "Gurubashi Dwarf Destroyer" },
+      { itemId: 19107, itemName: "Bloodseeker" },
+      { itemId: 17072, itemName: "Blastershot Launcher" },
+      { itemId: 22656, itemName: "The Purifier" }
     ]
   }
 };
