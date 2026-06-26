@@ -186,6 +186,19 @@ function normalizeBisItems(bisEntry) {
     .filter(Boolean);
 }
 
+function getBisTierLabel(index) {
+  if (index === 0) {
+    return "Best";
+  }
+  if (index === 1) {
+    return "Better";
+  }
+  if (index === 2) {
+    return "Good";
+  }
+  return `Alt ${index + 1}`;
+}
+
 function buildWowheadItemUrl(itemId) {
   const id = Number(itemId);
   if (!Number.isFinite(id) || id <= 0) {
@@ -322,18 +335,32 @@ function CharactersPage() {
       const equipped = selectedEquipmentBySlot.get(slot) || null;
       const normalizedBisItems = normalizeBisItems(bisItemIds);
       const normalizedBisIds = normalizedBisItems.map((item) => item.itemId);
+      const rankedBisItems = normalizedBisItems.map((item, index) => ({
+        ...item,
+        tier: getBisTierLabel(index),
+        index
+      }));
 
       const equippedId = Number(equipped?.itemId || 0);
       const primaryBisId = normalizedBisIds[0] || 0;
       const isBis = equippedId > 0 && primaryBisId > 0 && equippedId === primaryBisId;
       const isAltOption = !isBis && equippedId > 0 && normalizedBisIds.slice(1).includes(equippedId);
+      const equippedRankIndex = normalizedBisIds.indexOf(equippedId);
+      const equippedTier = equippedRankIndex >= 0 ? getBisTierLabel(equippedRankIndex) : "Not ranked";
+      const recommendedItems = isBis
+        ? []
+        : equippedRankIndex >= 0
+          ? rankedBisItems.slice(0, equippedRankIndex)
+          : rankedBisItems;
 
       rows.push({
         slot,
         slotName: SLOT_LABELS[slot] || `Slot ${slot}`,
         equipped,
         bisItemIds: normalizedBisIds,
-        bisItems: normalizedBisItems,
+        bisItems: rankedBisItems,
+        recommendedItems,
+        equippedTier,
         isAltOption,
         status: isBis ? "bis" : equipped ? "upgrade" : "missing"
       });
@@ -622,7 +649,7 @@ function CharactersPage() {
                 selectedBisBySlot ? (
                   <ul className="simple-list bis-upgrade-list">
                     {bisUpgradeRows.map((row) => {
-                      const topBisItems = row.bisItems;
+                      const topBisItems = row.recommendedItems;
                       return (
                         <li key={row.slot} className={`bis-upgrade-item ${row.status}`}>
                           <span>
@@ -643,7 +670,7 @@ function CharactersPage() {
                           </span>
                           <span>
                             {row.status === "bis"
-                              ? "BiS"
+                              ? "BiS (Best)"
                               : topBisItems.length
                                 ? (
                                   <span className="bis-item-options">
@@ -658,12 +685,15 @@ function CharactersPage() {
                                         >
                                           {item.name}
                                         </a>
+                                        {` (${item.tier})`}
                                       </span>
                                     ))}
-                                    {row.isAltOption ? " (alt equipped)" : ""}
+                                    {row.isAltOption ? ` (equipped: ${row.equippedTier})` : ""}
                                   </span>
                                 )
-                                : "No recommendation"}
+                                : row.isAltOption
+                                  ? `No better recommendation (equipped: ${row.equippedTier})`
+                                  : "No recommendation"}
                           </span>
                         </li>
                       );
