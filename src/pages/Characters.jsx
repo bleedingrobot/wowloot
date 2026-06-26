@@ -39,6 +39,10 @@ const DEFAULT_SPEC_BY_CLASS = {
   Paladin: "paladin-holy-p6"
 };
 
+const ITEM_ID_PLACEHOLDER_PATTERN = /^item\s*#\d+$/i;
+
+const fetchedItemNameCache = new Map();
+
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -88,6 +92,75 @@ function getItemName(item) {
   }
 
   return "Empty";
+}
+
+function hasMissingItemName(item) {
+  const itemId = Number(item?.itemId || 0);
+  if (!Number.isFinite(itemId) || itemId <= 0) {
+    return false;
+  }
+
+  const name = String(item?.itemName || "").trim();
+  if (!name) {
+    return true;
+  }
+
+  return ITEM_ID_PLACEHOLDER_PATTERN.test(name);
+}
+
+function extractNameFromWowheadXml(xmlText) {
+  const xml = String(xmlText || "");
+  if (!xml) {
+    return "";
+  }
+
+  const cdataMatch = xml.match(/<name><!\[CDATA\[(.*?)\]\]><\/name>/i);
+  if (cdataMatch?.[1]) {
+    return String(cdataMatch[1]).trim();
+  }
+
+  const plainMatch = xml.match(/<name>(.*?)<\/name>/i);
+  if (plainMatch?.[1]) {
+    return String(plainMatch[1]).trim();
+  }
+
+  return "";
+}
+
+async function fetchWowheadItemName(itemId) {
+  const id = Number(itemId);
+  if (!Number.isFinite(id) || id <= 0) {
+    return "";
+  }
+
+  if (fetchedItemNameCache.has(id)) {
+    return fetchedItemNameCache.get(id) || "";
+  }
+
+  const urls = [
+    `https://www.wowhead.com/classic/item=${id}&xml`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.wowhead.com/classic/item=${id}&xml`)}`
+  ];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        continue;
+      }
+
+      const text = await response.text();
+      const name = extractNameFromWowheadXml(text);
+      if (name) {
+        fetchedItemNameCache.set(id, name);
+        return name;
+      }
+    } catch {
+      // Try the next source.
+    }
+  }
+
+  return "";
 }
 
 function getBisItemNameById(itemId) {
@@ -148,6 +221,8 @@ function CharactersPage() {
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
   const [showBisUpgrades, setShowBisUpgrades] = useState(false);
   const [selectedSpecKey, setSelectedSpecKey] = useState("");
+  const [isResolvingItemNames, setIsResolvingItemNames] = useState(false);
+  const [resolveItemNamesMessage, setResolveItemNamesMessage] = useState("");
 
   const classOptions = useMemo(
     () => Array.from(new Set(data.characters.map((character) => character.class).filter(Boolean))).sort(),
@@ -353,6 +428,88 @@ function CharactersPage() {
     }
   };
 
+  const onResolveMissingItemNames = async () => {
+    if (!selectedCharacter?.id || isResolvingItemNames) {
+      return;
+    }
+
+    const equippedItems = Array.isArray(selectedCharacter.equippedItems)
+      ? selectedCharacter.equippedItems
+      : [];
+
+    const missingIds = Array.from(new Set(
+      equippedItems
+        .filter((item) => hasMissingItemName(item))
+        .map((item) => Number(item.itemId))
+        .filter((id) => Number.isFinite(id) && id > 0)
+    ));
+
+    if (!missingIds.length) {
+      setResolveItemNamesMessage("No missing equipped item names found for this character.");
+      return;
+    }
+
+    setIsResolvingItemNames(true);
+    setResolveItemNamesMessage(`Fetching ${missingIds.length} missing item name(s)...`);
+
+    try {
+      const resolvedNameById = new Map();
+
+      for (const id of missingIds) {
+        const knownName = BIS_ITEM_NAME_BY_ID[id];
+        if (knownName) {
+          resolvedNameById.set(id, knownName);
+          continue;
+        }
+
+        const fetchedName = await fetchWowheadItemName(id);
+        if (fetchedName) {
+          resolvedNameById.set(id, fetchedName);
+        }
+      }
+
+      const nextEquippedItems = equippedItems.map((item) => {
+        if (!hasMissingItemName(item)) {
+          return item;
+        }
+
+        const id = Number(item.itemId || 0);
+        const resolvedName = resolvedNameById.get(id);
+        if (!resolvedName) {
+          return item;
+        }
+
+        return {
+          ...item,
+          itemName: resolvedName
+        };
+      });
+
+      const fixedCount = nextEquippedItems.reduce((count, item, index) => {
+        const prevName = String(equippedItems[index]?.itemName || "").trim();
+        const nextName = String(item?.itemName || "").trim();
+        return prevName !== nextName ? count + 1 : count;
+      }, 0);
+
+      if (!fixedCount) {
+        setResolveItemNamesMessage(
+          `Could not resolve ${missingIds.length} missing item name(s) right now. Try again later.`
+        );
+        return;
+      }
+
+      await updateCharacter(selectedCharacter.id, {
+        equippedItems: nextEquippedItems
+      });
+
+      setResolveItemNamesMessage(`Updated ${fixedCount} equipped item name(s).`);
+    } catch {
+      setResolveItemNamesMessage("Failed to fetch missing item names. Please try again.");
+    } finally {
+      setIsResolvingItemNames(false);
+    }
+  };
+
   if (!user) {
     return <p className="empty-panel">Sign in to view character armory details.</p>;
   }
@@ -472,7 +629,17 @@ function CharactersPage() {
                     Source Guide
                   </a>
                 ) : null}
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={onResolveMissingItemNames}
+                  disabled={isResolvingItemNames || !selectedCharacter}
+                >
+                  {isResolvingItemNames ? "Fetching item names..." : "Fetch missing item names"}
+                </button>
               </div>
+
+              {resolveItemNamesMessage ? <p className="subtitle">{resolveItemNamesMessage}</p> : null}
 
               {showBisUpgrades ? (
                 selectedBisBySlot ? (
