@@ -1,4 +1,4 @@
-export const SPEC_OPTIONS_BY_CLASS = {
+﻿export const SPEC_OPTIONS_BY_CLASS = {
   Druid: [
     { key: "druid-balance-p6", label: "Balance (Phase 6)" },
     { key: "druid-feral-dps-p6", label: "Feral DPS (Phase 6)" },
