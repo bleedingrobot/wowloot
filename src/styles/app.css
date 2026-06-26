@@ -438,6 +438,39 @@ button.danger {
   gap: 0.7rem;
 }
 
+.minimal-settings-panel {
+  gap: 0.55rem;
+}
+
+.minimal-settings-header {
+  justify-content: space-between;
+}
+
+.setup-check-result {
+  color: #d7e9ff;
+}
+
+.setup-guide-accordion {
+  border: 1px solid rgba(158, 176, 206, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.55rem 0.7rem;
+}
+
+.setup-guide-accordion summary {
+  cursor: pointer;
+  color: var(--text-main);
+  font-weight: 700;
+}
+
+.setup-guide-accordion[open] {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.setup-guide-accordion .import-guide-grid {
+  margin-top: 0.55rem;
+}
+
 .import-guide-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -521,6 +554,10 @@ button.danger {
 .sync-warning {
   margin: 0.2rem 0 0;
   color: #ffd8d8;
+}
+
+.settings-account-actions {
+  margin-top: 0.2rem;
 }
 
 .inventory-stats {

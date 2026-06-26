@@ -120,10 +120,8 @@ function SettingsPage() {
   const [pendingBagnonConnectHandles, setPendingBagnonConnectHandles] = useState([]);
   const [pendingBagnonAccountName, setPendingBagnonAccountName] = useState("");
   const [isClearingInventory, setIsClearingInventory] = useState(false);
-  const [novaValidationMessage, setNovaValidationMessage] = useState("");
-  const [inventoryValidationMessage, setInventoryValidationMessage] = useState("");
-  const [novaValidationRun, setNovaValidationRun] = useState(false);
-  const [inventoryValidationRun, setInventoryValidationRun] = useState(false);
+  const [requiredFilesCheckMessage, setRequiredFilesCheckMessage] = useState("");
+  const [requiredFilesCheckRun, setRequiredFilesCheckRun] = useState(false);
   const accountNameById = useMemo(
     () => new Map(data.accounts.map((account) => [account.id, account.battleNetId])),
     [data.accounts]
@@ -166,33 +164,23 @@ function SettingsPage() {
     [bagnonConnectedFiles]
   );
 
-  const validateNovaSetup = useCallback(() => {
-    const missingFiles = novaLinkedSummary.expectedStates
+  const validateRequiredFiles = useCallback(() => {
+    const missingNova = novaLinkedSummary.expectedStates
       .filter((entry) => !entry.linked)
       .map((entry) => entry.fileName);
+    const missingInventory = inventoryLinkedSummary.expectedStates
+      .filter((entry) => !entry.linked)
+      .map((entry) => entry.fileName);
+    const missing = [...missingNova, ...missingInventory];
 
-    setNovaValidationRun(true);
-    if (!missingFiles.length) {
-      setNovaValidationMessage("Nova setup ready. All expected files are linked.");
+    setRequiredFilesCheckRun(true);
+    if (!missing.length) {
+      setRequiredFilesCheckMessage("All required files are linked. Settings are ready to sync.");
       return;
     }
 
-    setNovaValidationMessage(`Nova setup incomplete. Missing: ${missingFiles.join(", ")}.`);
-  }, [novaLinkedSummary]);
-
-  const validateInventorySetup = useCallback(() => {
-    const missingFiles = inventoryLinkedSummary.expectedStates
-      .filter((entry) => !entry.linked)
-      .map((entry) => entry.fileName);
-
-    setInventoryValidationRun(true);
-    if (!missingFiles.length) {
-      setInventoryValidationMessage("Inventory setup ready. All expected files are linked.");
-      return;
-    }
-
-    setInventoryValidationMessage(`Inventory setup incomplete. Missing: ${missingFiles.join(", ")}.`);
-  }, [inventoryLinkedSummary]);
+    setRequiredFilesCheckMessage(`Missing required files: ${missing.join(", ")}.`);
+  }, [novaLinkedSummary, inventoryLinkedSummary]);
 
   const readSelectedFileIndexes = () => {
     try {
@@ -1112,7 +1100,7 @@ function SettingsPage() {
   return (
     <section className="panel">
       <h2>Settings</h2>
-      <p>Google login keeps each player's data isolated by Firebase user ID.</p>
+      <p className="subtitle">Manage file connections, sync, and account controls.</p>
 
       {!hasFirebaseConfig ? (
         <p className="empty-panel">Firebase env vars are missing. Copy .env.example into .env.local.</p>
@@ -1122,89 +1110,77 @@ function SettingsPage() {
             Signed in as <strong>{user.email}</strong>
           </p>
 
-          <div className="panel import-guide-panel">
-            <h3>Import Setup Guide</h3>
-            <p className="subtitle">Link files once per browser, then sync whenever your SavedVariables change.</p>
-            <div className="import-guide-grid">
-              <article className="import-guide-card">
-                <h4>Raid + Buff Import (Nova)</h4>
-                <p className="subtitle">Expected files from SavedVariables:</p>
-                <ul className="import-file-checklist">
-                  {novaLinkedSummary.expectedStates.map((entry) => (
-                    <li
-                      key={entry.fileName}
-                      className={`import-file-item ${entry.linked ? "linked" : "missing"}${novaValidationRun && !entry.linked ? " needs-attention" : ""}`}
-                    >
-                      <span>{entry.fileName}</span>
-                      <span className={`import-status-chip ${entry.linked ? "ready" : "missing"}`}>
-                        {entry.linked ? "Linked" : "Missing"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="row-actions import-guide-actions">
-                  <button type="button" className="secondary-btn" onClick={validateNovaSetup}>
-                    Check Nova Setup
-                  </button>
-                  {novaValidationMessage ? <span className="subtitle">{novaValidationMessage}</span> : null}
-                </div>
-                <p className="subtitle">
-                  Updates: characters, raid lockouts, active raids, world buffs, booned buffs.
-                </p>
-                <p className="subtitle">
-                  Status: {novaLinkedSummary.linkedCount}/{NOVA_EXPECTED_FILES.length} expected file(s) linked.
-                </p>
-              </article>
-
-              <article className="import-guide-card">
-                <h4>Inventory Import (DataStore)</h4>
-                <p className="subtitle">Expected files from SavedVariables:</p>
-                <ul className="import-file-checklist">
-                  {inventoryLinkedSummary.expectedStates.map((entry) => (
-                    <li
-                      key={entry.fileName}
-                      className={`import-file-item ${entry.linked ? "linked" : "missing"}${inventoryValidationRun && !entry.linked ? " needs-attention" : ""}`}
-                    >
-                      <span>{entry.fileName}</span>
-                      <span className={`import-status-chip ${entry.linked ? "ready" : "missing"}`}>
-                        {entry.linked ? "Linked" : "Missing"}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="row-actions import-guide-actions">
-                  <button type="button" className="secondary-btn" onClick={validateInventorySetup}>
-                    Check Inventory Setup
-                  </button>
-                  {inventoryValidationMessage ? <span className="subtitle">{inventoryValidationMessage}</span> : null}
-                </div>
-                <p className="subtitle">
-                  Updates: bag/bank inventory, equipped gear with item levels, and character profile metadata.
-                </p>
-                <p className="subtitle">
-                  Status: {inventoryLinkedSummary.linkedCount}/{INVENTORY_EXPECTED_FILES.length} expected file(s) linked.
-                </p>
-              </article>
+          <div className="panel import-guide-panel minimal-settings-panel">
+            <div className="row-actions minimal-settings-header">
+              <h3>Setup</h3>
+              <button type="button" className="secondary-btn" onClick={validateRequiredFiles}>
+                Check required files
+              </button>
             </div>
+            <p className="subtitle">
+              Linked: {novaLinkedSummary.linkedCount + inventoryLinkedSummary.linkedCount}/
+              {NOVA_EXPECTED_FILES.length + INVENTORY_EXPECTED_FILES.length} required files.
+            </p>
+            {requiredFilesCheckMessage ? (
+              <p className={`subtitle ${requiredFilesCheckRun ? "setup-check-result" : ""}`}>
+                {requiredFilesCheckMessage}
+              </p>
+            ) : null}
+
+            <details className="setup-guide-accordion">
+              <summary>What to connect (expand guide)</summary>
+              <div className="import-guide-grid">
+                <article className="import-guide-card">
+                  <h4>Nova: raids + buffs</h4>
+                  <ul className="import-file-checklist">
+                    {novaLinkedSummary.expectedStates.map((entry) => (
+                      <li
+                        key={entry.fileName}
+                        className={`import-file-item ${entry.linked ? "linked" : "missing"}${requiredFilesCheckRun && !entry.linked ? " needs-attention" : ""}`}
+                      >
+                        <span>{entry.fileName}</span>
+                        <span className={`import-status-chip ${entry.linked ? "ready" : "missing"}`}>
+                          {entry.linked ? "Linked" : "Missing"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+
+                <article className="import-guide-card">
+                  <h4>DataStore: inventory + gear</h4>
+                  <ul className="import-file-checklist">
+                    {inventoryLinkedSummary.expectedStates.map((entry) => (
+                      <li
+                        key={entry.fileName}
+                        className={`import-file-item ${entry.linked ? "linked" : "missing"}${requiredFilesCheckRun && !entry.linked ? " needs-attention" : ""}`}
+                      >
+                        <span>{entry.fileName}</span>
+                        <span className={`import-status-chip ${entry.linked ? "ready" : "missing"}`}>
+                          {entry.linked ? "Linked" : "Missing"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </article>
+              </div>
+            </details>
           </div>
 
           <div className="panel sync-panel">
-            <h3>NovaInstanceTracker Sync</h3>
-            <p>
-              Link expected Nova files first, then use Sync Connected Files to refresh raid and buff data.
-            </p>
+            <h3>Nova Sync</h3>
             {!novaLinkedSummary.allLinked ? (
-              <p className="sync-warning">Missing expected Nova file links. Check the setup guide above before syncing.</p>
+              <p className="sync-warning">Missing required Nova file links.</p>
             ) : null}
             <div className="row-actions">
               <button type="button" onClick={onConnectFiles} disabled={isSyncing}>
-                Connect Nova
+                Connect Nova Files
               </button>
               <button type="button" onClick={onUpdateFromConnectedFiles} disabled={isSyncing}>
                 {isSyncing ? "Syncing..." : "Sync Connected Files"}
               </button>
             </div>
-            <h4>Connected Files</h4>
+            <h4>Connected Nova Files</h4>
             <ul className="simple-list">
               {connectedFiles.length ? (
                 connectedFiles.map((item) => (
@@ -1267,12 +1243,9 @@ function SettingsPage() {
           </div>
 
           <div className="panel sync-panel">
-            <h3>Inventory Sync (DataStore)</h3>
-            <p>
-              Link DataStore_Containers files first, then use Sync Connected Files to refresh bag and bank data.
-            </p>
+            <h3>Inventory Sync</h3>
             {!inventoryLinkedSummary.allLinked ? (
-              <p className="sync-warning">Missing expected inventory file links. Check the setup guide above before syncing.</p>
+              <p className="sync-warning">Missing required inventory file links.</p>
             ) : null}
             <div className="row-actions">
               <button type="button" onClick={onConnectBagnonFiles} disabled={isBagnonSyncing}>
@@ -1285,7 +1258,7 @@ function SettingsPage() {
                 {isClearingInventory ? "Clearing..." : "Clear Inventory Data"}
               </button>
             </div>
-            <h4>Connected Files</h4>
+            <h4>Connected Inventory Files</h4>
             <ul className="simple-list">
               {bagnonConnectedFiles.length ? (
                 bagnonConnectedFiles.map((item) => (
@@ -1451,17 +1424,19 @@ function SettingsPage() {
             )}
           </div>
 
-          <button type="button" onClick={signOutUser}>
-            Sign Out
-          </button>
-          <button
-            type="button"
-            className="danger"
-            onClick={onDeleteAllData}
-            disabled={isDeletingAll}
-          >
-            {isDeletingAll ? "Deleting..." : "Delete All Data"}
-          </button>
+          <div className="row-actions settings-account-actions">
+            <button type="button" onClick={signOutUser}>
+              Sign Out
+            </button>
+            <button
+              type="button"
+              className="danger"
+              onClick={onDeleteAllData}
+              disabled={isDeletingAll}
+            >
+              {isDeletingAll ? "Deleting..." : "Delete All Data"}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="stack-form">
