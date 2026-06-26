@@ -258,9 +258,13 @@ function DashboardPage() {
         return false;
       }
 
+      if (buffChipVisibility === "missing" && row.missingBuffs.length === 0) {
+        return false;
+      }
+
       return true;
     });
-  }, [buffReadinessRows, buffReadinessClassFilter, buffReadinessRowFilter]);
+  }, [buffReadinessRows, buffReadinessClassFilter, buffReadinessRowFilter, buffChipVisibility]);
 
   const hydrateConnectedFiles = useCallback(() => {
     loadConnectedHandles()
