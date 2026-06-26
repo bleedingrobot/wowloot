@@ -35,6 +35,7 @@ import { replaceInventoryItems } from "../services/dataService";
 const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
 const BAGNON_SELECTED_FILE_INDEXES_KEY = "bagnon_selected_file_indexes";
+const DASHBOARD_SECTION_STATE_KEY = "dashboard_section_state";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -93,6 +94,35 @@ function getSelectedBagnonConnectedFileIndexes() {
   }
 }
 
+function readDashboardSectionState() {
+  const defaults = {
+    buffReadiness: true,
+    filters: true,
+    characters: true
+  };
+
+  try {
+    const raw = localStorage.getItem(DASHBOARD_SECTION_STATE_KEY);
+    if (!raw) {
+      return defaults;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return defaults;
+    }
+
+    return {
+      ...defaults,
+      buffReadiness: parsed.buffReadiness !== false,
+      filters: parsed.filters !== false,
+      characters: parsed.characters !== false
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
@@ -116,6 +146,7 @@ function DashboardPage() {
   const [buffReadinessClassFilter, setBuffReadinessClassFilter] = useState("all");
   const [buffReadinessRowFilter, setBuffReadinessRowFilter] = useState("all");
   const [buffChipVisibility, setBuffChipVisibility] = useState("all");
+  const [sectionOpen, setSectionOpen] = useState(() => readDashboardSectionState());
   const [cooldownAlerts, setCooldownAlerts] = useState([]);
   const previousLockedRaidsRef = useRef(null);
 
@@ -330,6 +361,17 @@ function DashboardPage() {
   const dismissCooldownAlert = useCallback((id) => {
     setCooldownAlerts((prev) => prev.filter((alert) => alert.id !== id));
   }, []);
+
+  const toggleSection = useCallback((sectionKey) => {
+    setSectionOpen((prev) => ({
+      ...prev,
+      [sectionKey]: !prev[sectionKey]
+    }));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_SECTION_STATE_KEY, JSON.stringify(sectionOpen));
+  }, [sectionOpen]);
 
   const filteredEntries = useMemo(() => {
     const entries = visibleCharacters.map((character) => {
@@ -957,12 +999,27 @@ function DashboardPage() {
         <p className="subtitle">Live raid activity detected: {activeRaidNames.join(", ")}.</p>
       ) : null}
 
-      <div className="panel">
-        <h3>Buff Readiness</h3>
-        <p className="subtitle">Uses Buff Profiles and data synced from NovaWorldBuffs/NIT files.</p>
-        {buffReadinessRows.length ? (
-          <>
-            <div className="buff-readiness-filters">
+      <div className="panel collapsible-section">
+        <div className="collapsible-header">
+          <div>
+            <h3>Buff Readiness</h3>
+            <p className="subtitle">Uses Buff Profiles and data synced from NovaWorldBuffs/NIT files.</p>
+          </div>
+          <button
+            type="button"
+            className="secondary-btn collapse-toggle"
+            onClick={() => toggleSection("buffReadiness")}
+            aria-expanded={sectionOpen.buffReadiness}
+            aria-controls="dashboard-buff-readiness"
+          >
+            {sectionOpen.buffReadiness ? "Collapse" : "Expand"}
+          </button>
+        </div>
+
+        {sectionOpen.buffReadiness ? (
+          buffReadinessRows.length ? (
+            <>
+              <div className="buff-readiness-filters" id="dashboard-buff-readiness">
               <select
                 value={buffReadinessClassFilter}
                 onChange={(event) => setBuffReadinessClassFilter(event.target.value)}
@@ -989,130 +1046,165 @@ function DashboardPage() {
                 <option value="all">Show all chips</option>
                 <option value="issues">Show booned + missing</option>
               </select>
-            </div>
-          <ul className="simple-list buff-readiness-list">
-            {filteredBuffReadinessRows.length ? (
-              filteredBuffReadinessRows.map((row) => {
-                const visibleBuffStatuses =
-                  buffChipVisibility === "issues"
-                    ? row.buffStatuses.filter((buff) => buff.status !== "active")
-                    : row.buffStatuses;
+              </div>
+              <ul className="simple-list buff-readiness-list">
+                {filteredBuffReadinessRows.length ? (
+                  filteredBuffReadinessRows.map((row) => {
+                    const visibleBuffStatuses =
+                      buffChipVisibility === "issues"
+                        ? row.buffStatuses.filter((buff) => buff.status !== "active")
+                        : row.buffStatuses;
 
-                return (
-                  <li key={row.characterId} className="buff-readiness-item">
-                    <div>
-                      <strong>{row.characterName}</strong> ({row.className}) - {row.readyCount}/{row.requiredBuffs.length} ready
-                    </div>
-                    {visibleBuffStatuses.length ? (
-                      <div className="buff-chip-row">
-                        {visibleBuffStatuses.map((buff) => (
-                          <span key={`${row.characterId}-${buff.name}`} className={`buff-chip ${buff.status}`}>
-                            {buff.name} - {buff.status === "active" ? "Active" : buff.status === "booned" ? "Booned" : "Missing"}
-                          </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="subtitle">All required buffs are active.</span>
-                    )}
-                  </li>
-                );
-              })
-            ) : (
-              <li>No characters match the selected readiness filters.</li>
-            )}
-          </ul>
-          </>
-        ) : (
-          <p className="empty-panel">Create Buff Profiles to start tracking class buff readiness.</p>
-        )}
+                    return (
+                      <li key={row.characterId} className="buff-readiness-item">
+                        <div>
+                          <strong>{row.characterName}</strong> ({row.className}) - {row.readyCount}/{row.requiredBuffs.length} ready
+                        </div>
+                        {visibleBuffStatuses.length ? (
+                          <div className="buff-chip-row">
+                            {visibleBuffStatuses.map((buff) => (
+                              <span key={`${row.characterId}-${buff.name}`} className={`buff-chip ${buff.status}`}>
+                                {buff.name} - {buff.status === "active" ? "Active" : buff.status === "booned" ? "Booned" : "Missing"}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="subtitle">All required buffs are active.</span>
+                        )}
+                      </li>
+                    );
+                  })
+                ) : (
+                  <li>No characters match the selected readiness filters.</li>
+                )}
+              </ul>
+            </>
+          ) : (
+            <p className="empty-panel" id="dashboard-buff-readiness">Create Buff Profiles to start tracking class buff readiness.</p>
+          )
+        ) : null}
       </div>
 
-      <div className="dashboard-filters">
-        <input
-          value={searchTerm}
-          onChange={(event) => setSearchTerm(event.target.value)}
-          placeholder="Search character name"
-        />
-        <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-          <option value="raids">Most raids needed</option>
-          <option value="name">Alphabetical</option>
-        </select>
-        <select value={needFilter} onChange={(event) => setNeedFilter(event.target.value)}>
-          <option value="needed">Needs items only</option>
-          <option value="all">Show all visible</option>
-        </select>
-        <select
-          value={availabilityFilter}
-          onChange={(event) => setAvailabilityFilter(event.target.value)}
-        >
-          <option value="any">All availability</option>
-          <option value="locked">Locked out only</option>
-          <option value="reset-ready">Reset-ready only</option>
-        </select>
-        <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
-          <option value="all">All classes</option>
-          {classOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <select value={factionFilter} onChange={(event) => setFactionFilter(event.target.value)}>
-          <option value="all">All factions</option>
-          {factionOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <select value={realmFilter} onChange={(event) => setRealmFilter(event.target.value)}>
-          <option value="all">All realms</option>
-          {realmOptions.map((option) => (
-            <option key={option} value={option}>
-              {option}
-            </option>
-          ))}
-        </select>
-        <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
-          <option value="all">All accounts</option>
-          {accountOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <input
-          type="number"
-          min="0"
-          step="1"
-          value={minLevelFilter}
-          onChange={(event) => setMinLevelFilter(event.target.value)}
-          placeholder="Level > X"
-        />
-        <button type="button" onClick={resetFilters} className="secondary-btn">
-          Clear
-        </button>
-      </div>
-
-      {!filteredEntries.length ? (
-        <p className="empty-panel">No characters match the current dashboard filters.</p>
-      ) : (
-        <div className="card-grid">
-          {filteredEntries.map((entry) => (
-            <CharacterCard
-              key={entry.character.id}
-              character={entry.character}
-              remainingLootCount={entry.remainingLootCount}
-              lockedRaidCount={entry.lockedRaidCount}
-              raidSummary={entry.raidSummary}
-              lockedRaidSummary={entry.lockedRaidSummary}
-              raidItemsByRaid={entry.raidItemsByRaid}
-              classIcon={entry.classIcon}
-              shoppingNeeds={entry.shoppingNeeds}
-            />
-          ))}
+      <div className="panel collapsible-section">
+        <div className="collapsible-header">
+          <h3>Filters</h3>
+          <button
+            type="button"
+            className="secondary-btn collapse-toggle"
+            onClick={() => toggleSection("filters")}
+            aria-expanded={sectionOpen.filters}
+            aria-controls="dashboard-filters"
+          >
+            {sectionOpen.filters ? "Collapse" : "Expand"}
+          </button>
         </div>
-      )}
+
+        {sectionOpen.filters ? (
+          <div className="dashboard-filters" id="dashboard-filters">
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search character name"
+            />
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+              <option value="raids">Most raids needed</option>
+              <option value="name">Alphabetical</option>
+            </select>
+            <select value={needFilter} onChange={(event) => setNeedFilter(event.target.value)}>
+              <option value="needed">Needs items only</option>
+              <option value="all">Show all visible</option>
+            </select>
+            <select
+              value={availabilityFilter}
+              onChange={(event) => setAvailabilityFilter(event.target.value)}
+            >
+              <option value="any">All availability</option>
+              <option value="locked">Locked out only</option>
+              <option value="reset-ready">Reset-ready only</option>
+            </select>
+            <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)}>
+              <option value="all">All classes</option>
+              {classOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <select value={factionFilter} onChange={(event) => setFactionFilter(event.target.value)}>
+              <option value="all">All factions</option>
+              {factionOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <select value={realmFilter} onChange={(event) => setRealmFilter(event.target.value)}>
+              <option value="all">All realms</option>
+              {realmOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+            <select value={accountFilter} onChange={(event) => setAccountFilter(event.target.value)}>
+              <option value="all">All accounts</option>
+              {accountOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={minLevelFilter}
+              onChange={(event) => setMinLevelFilter(event.target.value)}
+              placeholder="Level > X"
+            />
+            <button type="button" onClick={resetFilters} className="secondary-btn">
+              Clear
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="panel collapsible-section">
+        <div className="collapsible-header">
+          <h3>Character Results ({filteredEntries.length})</h3>
+          <button
+            type="button"
+            className="secondary-btn collapse-toggle"
+            onClick={() => toggleSection("characters")}
+            aria-expanded={sectionOpen.characters}
+            aria-controls="dashboard-character-results"
+          >
+            {sectionOpen.characters ? "Collapse" : "Expand"}
+          </button>
+        </div>
+
+        {sectionOpen.characters ? (
+          !filteredEntries.length ? (
+            <p className="empty-panel" id="dashboard-character-results">No characters match the current dashboard filters.</p>
+          ) : (
+            <div className="card-grid" id="dashboard-character-results">
+              {filteredEntries.map((entry) => (
+                <CharacterCard
+                  key={entry.character.id}
+                  character={entry.character}
+                  remainingLootCount={entry.remainingLootCount}
+                  lockedRaidCount={entry.lockedRaidCount}
+                  raidSummary={entry.raidSummary}
+                  lockedRaidSummary={entry.lockedRaidSummary}
+                  raidItemsByRaid={entry.raidItemsByRaid}
+                  classIcon={entry.classIcon}
+                  shoppingNeeds={entry.shoppingNeeds}
+                />
+              ))}
+            </div>
+          )
+        ) : null}
+      </div>
     </section>
   );
 }
