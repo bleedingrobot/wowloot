@@ -1214,7 +1214,6 @@ function DashboardPage() {
         <div className="collapsible-header">
           <div>
             <h3>Buff Readiness</h3>
-            <p className="subtitle">Uses Buff Profiles and data synced from NovaWorldBuffs/NIT files.</p>
           </div>
           <button
             type="button"
