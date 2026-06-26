@@ -703,6 +703,14 @@ button.danger {
   .buff-readiness-filters {
     grid-template-columns: 1fr;
   }
+
+  .sync-controls {
+    align-items: stretch;
+  }
+
+  .sync-controls select {
+    width: 100%;
+  }
 }
 
 .sync-pill {
@@ -758,6 +766,19 @@ button.danger {
 .cooldown-alert .secondary-btn {
   min-height: 34px;
   padding: 0.35rem 0.55rem;
+}
+
+.sync-controls {
+  margin-top: 0.45rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem 0.75rem;
+  align-items: center;
+}
+
+.sync-controls select {
+  min-width: 150px;
+  min-height: 38px;
 }
 
 .collapsible-section {

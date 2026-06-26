@@ -36,6 +36,7 @@ const NIT_PATHS_KEY = "nit_savedvariables_paths";
 const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
 const BAGNON_SELECTED_FILE_INDEXES_KEY = "bagnon_selected_file_indexes";
 const DASHBOARD_SECTION_STATE_KEY = "dashboard_section_state";
+const DASHBOARD_AUTOSYNC_KEY = "dashboard_auto_sync_settings";
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -123,6 +124,37 @@ function readDashboardSectionState() {
   }
 }
 
+function readDashboardAutoSyncSettings() {
+  const defaults = {
+    enabled: false,
+    minutes: 5
+  };
+
+  try {
+    const raw = localStorage.getItem(DASHBOARD_AUTOSYNC_KEY);
+    if (!raw) {
+      return defaults;
+    }
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") {
+      return defaults;
+    }
+
+    const parsedMinutes = Number(parsed.minutes);
+    const safeMinutes = Number.isFinite(parsedMinutes)
+      ? Math.min(60, Math.max(1, Math.round(parsedMinutes)))
+      : defaults.minutes;
+
+    return {
+      enabled: parsed.enabled === true,
+      minutes: safeMinutes
+    };
+  } catch {
+    return defaults;
+  }
+}
+
 function DashboardPage() {
   const { user, loading: authLoading, hasFirebaseConfig } = useAuth();
   const { data, loading } = useUserCollections(user?.uid);
@@ -147,8 +179,13 @@ function DashboardPage() {
   const [buffReadinessRowFilter, setBuffReadinessRowFilter] = useState("all");
   const [buffChipVisibility, setBuffChipVisibility] = useState("all");
   const [sectionOpen, setSectionOpen] = useState(() => readDashboardSectionState());
+  const [autoSyncSettings, setAutoSyncSettings] = useState(() => readDashboardAutoSyncSettings());
+  const [autoSyncFailures, setAutoSyncFailures] = useState(0);
+  const [autoSyncWarning, setAutoSyncWarning] = useState("");
+  const [nextAutoSyncAt, setNextAutoSyncAt] = useState(null);
   const [cooldownAlerts, setCooldownAlerts] = useState([]);
   const previousLockedRaidsRef = useRef(null);
+  const autoSyncInFlightRef = useRef(false);
 
   const nextReset = getNextRaidReset("Naxxramas");
 
@@ -376,6 +413,10 @@ function DashboardPage() {
   useEffect(() => {
     localStorage.setItem(DASHBOARD_SECTION_STATE_KEY, JSON.stringify(sectionOpen));
   }, [sectionOpen]);
+
+  useEffect(() => {
+    localStorage.setItem(DASHBOARD_AUTOSYNC_KEY, JSON.stringify(autoSyncSettings));
+  }, [autoSyncSettings]);
 
   const filteredEntries = useMemo(() => {
     const entries = visibleCharacters.map((character) => {
@@ -789,7 +830,7 @@ function DashboardPage() {
       if (!silent) {
         setSyncMessage("Browser does not support connected file sync. Use manual file picker sync.");
       }
-      return;
+      return { ok: false, reason: "no-indexeddb" };
     }
 
     try {
@@ -817,7 +858,7 @@ function DashboardPage() {
           if (!silent) {
             setSyncMessage("Reconnect Nova files in Settings to restore file access.");
           }
-          return;
+          return { ok: false, reason: "nova-permission" };
         }
 
         const file = await handle.getFile();
@@ -846,7 +887,7 @@ function DashboardPage() {
           if (!silent) {
             setSyncMessage("Reconnect Bagnon files in Settings to restore file access.");
           }
-          return;
+          return { ok: false, reason: "bagnon-permission" };
         }
 
         const file = await handle.getFile();
@@ -862,7 +903,7 @@ function DashboardPage() {
           setSyncStatus("warn");
           setSyncMessage("No files selected for sync. Select files in Settings.");
         }
-        return;
+        return { ok: false, reason: "no-sources" };
       }
 
       if (novaSources.length) {
@@ -879,14 +920,62 @@ function DashboardPage() {
         );
       }
       setSyncStatus("success");
+      setLastSyncAt(new Date());
+      setAutoSyncFailures(0);
+      setAutoSyncWarning("");
+      return { ok: true };
     } catch (error) {
       console.error("[auto-sync] Error:", error);
       setSyncStatus("warn");
       if (!silent) {
         setSyncMessage("Could not read selected connected files. Reconnect files in Settings.");
       }
+      return { ok: false, reason: "read-error" };
     }
-  }, [syncFromLuaTexts]);
+  }, [syncFromLuaTexts, syncBagnonFromLuaTexts]);
+
+  useEffect(() => {
+    if (!autoSyncSettings.enabled || !user) {
+      setNextAutoSyncAt(null);
+      if (!autoSyncSettings.enabled) {
+        setAutoSyncFailures(0);
+        setAutoSyncWarning("");
+      }
+      return;
+    }
+
+    const minutes = Math.min(60, Math.max(1, Number(autoSyncSettings.minutes) || 5));
+    const intervalMs = minutes * 60 * 1000;
+    setNextAutoSyncAt(new Date(Date.now() + intervalMs));
+
+    const timerId = window.setInterval(async () => {
+      if (autoSyncInFlightRef.current) {
+        return;
+      }
+
+      autoSyncInFlightRef.current = true;
+      try {
+        const result = await onSyncFromConnectedFiles(true);
+        if (!result?.ok) {
+          setAutoSyncFailures((prev) => {
+            const next = prev + 1;
+            setAutoSyncWarning(
+              `Auto-sync retry warning: ${next} failed attempt${next === 1 ? "" : "s"}. Check connected file permissions in Settings if this continues.`
+            );
+            return next;
+          });
+        }
+      } finally {
+        autoSyncInFlightRef.current = false;
+        setNextAutoSyncAt(new Date(Date.now() + intervalMs));
+      }
+    }, intervalMs);
+
+    return () => {
+      window.clearInterval(timerId);
+      autoSyncInFlightRef.current = false;
+    };
+  }, [autoSyncSettings.enabled, autoSyncSettings.minutes, onSyncFromConnectedFiles, user]);
 
   const onReconnectConnectedFile = async (index) => {
     if (!window.showOpenFilePicker) {
@@ -999,6 +1088,42 @@ function DashboardPage() {
         </div>
       </div>
       {syncMessage ? <p className="subtitle">{syncMessage}</p> : null}
+      <div className="sync-controls" role="group" aria-label="Auto sync controls">
+        <label className="saved-toggle">
+          <input
+            type="checkbox"
+            checked={autoSyncSettings.enabled}
+            onChange={(event) => setAutoSyncSettings((prev) => ({ ...prev, enabled: event.target.checked }))}
+          />
+          Auto-sync
+        </label>
+        <select
+          value={String(autoSyncSettings.minutes)}
+          onChange={(event) => {
+            const minutes = Math.min(60, Math.max(1, Number(event.target.value) || 5));
+            setAutoSyncSettings((prev) => ({ ...prev, minutes }));
+          }}
+          disabled={!autoSyncSettings.enabled}
+        >
+          <option value="1">Every 1 minute</option>
+          <option value="2">Every 2 minutes</option>
+          <option value="5">Every 5 minutes</option>
+          <option value="10">Every 10 minutes</option>
+          <option value="15">Every 15 minutes</option>
+          <option value="30">Every 30 minutes</option>
+          <option value="60">Every 60 minutes</option>
+        </select>
+        <span className="subtitle">
+          Last successful sync: {lastSyncAt ? lastSyncAt.toLocaleTimeString() : "Never"}
+        </span>
+        {autoSyncSettings.enabled && nextAutoSyncAt ? (
+          <span className="subtitle">Next auto-sync: {nextAutoSyncAt.toLocaleTimeString()}</span>
+        ) : null}
+        {autoSyncSettings.enabled && autoSyncFailures > 0 ? (
+          <span className="subtitle">Retry attempts: {autoSyncFailures}</span>
+        ) : null}
+      </div>
+      {autoSyncWarning ? <p className="sync-warning">{autoSyncWarning}</p> : null}
       {activeRaidNames.length ? (
         <p className="subtitle">Live raid activity detected: {activeRaidNames.join(", ")}.</p>
       ) : null}
