@@ -622,7 +622,7 @@ function CharactersPage() {
                 selectedBisBySlot ? (
                   <ul className="simple-list bis-upgrade-list">
                     {bisUpgradeRows.map((row) => {
-                      const topBisItems = row.bisItems.slice(0, 3);
+                      const topBisItems = row.bisItems;
                       return (
                         <li key={row.slot} className={`bis-upgrade-item ${row.status}`}>
                           <span>
@@ -660,7 +660,6 @@ function CharactersPage() {
                                         </a>
                                       </span>
                                     ))}
-                                    {row.bisItems.length > topBisItems.length ? " + more" : ""}
                                     {row.isAltOption ? " (alt equipped)" : ""}
                                   </span>
                                 )
