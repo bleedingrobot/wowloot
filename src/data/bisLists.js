@@ -316,7 +316,11 @@ export const BIS_ITEM_IDS_BY_SPEC = {
     5: [{ itemId: 23000, itemName: "Plated Abomination Ribcage" }],
     6: [{ itemId: 23219, itemName: "Girdle of the Mentor" }],
     7: [{ itemId: 23068, itemName: "Legplates of Carnage" }],
-    8: [{ itemId: 19387, itemName: "Chromatic Boots" }],
+    8: [
+      { itemId: 19387, itemName: "Chromatic Boots" },
+      { itemId: 21493, itemName: "Boots of the Vanguard" },
+      { itemId: 21490, itemName: "Slime Kickers" }
+    ],
     9: [{ itemId: 22936, itemName: "Wristguards of Vengeance" }],
     10: [{ itemId: 21581, itemName: "Gauntlets of Annihilation" }],
     11: [
