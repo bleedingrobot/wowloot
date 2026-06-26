@@ -26,6 +26,14 @@ import {
   saveConnectedHandles
 } from "../utils/novaFileConnections";
 import { parseDataStoreContainers } from "../utils/dataStoreContainersParser";
+import { parseDataStoreInventory } from "../utils/dataStoreInventoryParser";
+import { parseDataStoreCharacters } from "../utils/dataStoreCharactersParser";
+import {
+  characterProfileKey,
+  detectDataStoreSourceType,
+  mergeCharacterProfiles,
+  mergeInventoryProfiles
+} from "../utils/dataStoreProfileHelpers";
 import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
@@ -41,7 +49,7 @@ const NIT_SELECTED_FILE_INDEXES_KEY = "nit_selected_file_indexes";
 const BAGNON_PATHS_KEY = "bagnon_savedvariables_paths";
 const BAGNON_SELECTED_FILE_INDEXES_KEY = "bagnon_selected_file_indexes";
 const NOVA_EXPECTED_FILES = ["NovaInstanceTracker.lua", "NovaWorldBuffs.lua"];
-const INVENTORY_EXPECTED_FILES = ["DataStore_Containers.lua"];
+const INVENTORY_EXPECTED_FILES = ["DataStore_Containers.lua", "DataStore_Inventory.lua", "DataStore_Characters.lua"];
 
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
@@ -637,20 +645,95 @@ function SettingsPage() {
 
     try {
       const parsedItems = [];
+      const parsedInventoryProfiles = [];
+      const parsedCharacterProfiles = [];
 
       for (const source of sources) {
-        parsedItems.push(
-          ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
-        );
+        const sourceType = detectDataStoreSourceType(source.fileName, source.text);
+        if (sourceType === "containers") {
+          parsedItems.push(
+            ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
+          );
+        }
+        if (sourceType === "inventory") {
+          parsedInventoryProfiles.push(
+            ...parseDataStoreInventory(source.text, source.fileName || "", source.accountHintName || "")
+          );
+        }
+        if (sourceType === "characters") {
+          parsedCharacterProfiles.push(
+            ...parseDataStoreCharacters(source.text, source.fileName || "", source.accountHintName || "")
+          );
+        }
       }
 
-      await replaceInventoryItems(user.uid, parsedItems);
+      if (parsedItems.length) {
+        await replaceInventoryItems(user.uid, parsedItems);
+      }
+
+      const charactersByKey = new Map(
+        data.characters.map((character) => [characterProfileKey(character.name, character.realm), character])
+      );
+
+      const mergedInventoryProfiles = mergeInventoryProfiles(parsedInventoryProfiles);
+      const mergedCharacterProfiles = mergeCharacterProfiles(parsedCharacterProfiles);
+      const profileOps = [];
+
+      mergedInventoryProfiles.forEach((profile) => {
+        const character = charactersByKey.get(characterProfileKey(profile.characterName, profile.realm));
+        if (!character) {
+          return;
+        }
+
+        profileOps.push(
+          updateCharacter(character.id, {
+            averageItemLevel: typeof profile.averageItemLevel === "number" ? profile.averageItemLevel : null,
+            overallItemLevel: typeof profile.overallItemLevel === "number" ? profile.overallItemLevel : null,
+            equippedItems: Array.isArray(profile.equippedItems) ? profile.equippedItems : [],
+            lastInventoryUpdate: profile.lastInventoryUpdate || null,
+            lastInventorySyncAt: new Date().toISOString()
+          })
+        );
+      });
+
+      mergedCharacterProfiles.forEach((profile) => {
+        const character = charactersByKey.get(characterProfileKey(profile.characterName, profile.realm));
+        if (!character) {
+          return;
+        }
+
+        const updates = {
+          zone: profile.zone || "",
+          subZone: profile.subZone || "",
+          bindLocation: profile.bindLocation || "",
+          guildName: profile.guildName || "",
+          guildRankName: profile.guildRankName || "",
+          guildRankIndex: typeof profile.guildRankIndex === "number" ? profile.guildRankIndex : null,
+          money: typeof profile.money === "number" ? profile.money : null,
+          isResting: typeof profile.isResting === "boolean" ? profile.isResting : null,
+          played: typeof profile.played === "number" ? profile.played : null,
+          playedThisLevel: typeof profile.playedThisLevel === "number" ? profile.playedThisLevel : null,
+          xp: typeof profile.xp === "number" ? profile.xp : null,
+          xpMax: typeof profile.xpMax === "number" ? profile.xpMax : null,
+          restXp: typeof profile.restXp === "number" ? profile.restXp : null,
+          lastCharacterUpdate: profile.lastCharacterUpdate || null,
+          lastLogoutTimestamp: profile.lastLogoutTimestamp || null,
+          lastCharacterSyncAt: new Date().toISOString()
+        };
+
+        profileOps.push(updateCharacter(character.id, updates));
+      });
+
+      if (profileOps.length) {
+        await Promise.all(profileOps);
+      }
+
       const uniqueItems = new Set(parsedItems.map((item) => `${item.itemId || ""}|${normalize(item.itemName)}`));
       setBagnonSyncMessage(
-        `Sync complete. Imported ${parsedItems.length} item stacks across ${uniqueItems.size} unique item(s).`
+        `Sync complete. Imported ${parsedItems.length} item stacks across ${uniqueItems.size} unique item(s), ${mergedInventoryProfiles.length} equipment profile(s), and ${mergedCharacterProfiles.length} character profile snapshot(s).`
       );
     } catch (error) {
-      setBagnonSyncMessage("Sync failed. Ensure you selected valid DataStore_Containers.lua files.");
+      setBagnonSyncMessage("Sync failed. Ensure you selected valid DataStore_Containers.lua, DataStore_Inventory.lua, and DataStore_Characters.lua files.");
     } finally {
       setIsBagnonSyncing(false);
     }
@@ -1096,7 +1179,7 @@ function SettingsPage() {
                   {inventoryValidationMessage ? <span className="subtitle">{inventoryValidationMessage}</span> : null}
                 </div>
                 <p className="subtitle">
-                  Updates: bag and bank inventory index used by Shopping and Dashboard totals.
+                  Updates: bag/bank inventory, equipped gear with item levels, and character profile metadata.
                 </p>
                 <p className="subtitle">
                   Status: {inventoryLinkedSummary.linkedCount}/{INVENTORY_EXPECTED_FILES.length} expected file(s) linked.

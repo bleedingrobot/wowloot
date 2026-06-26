@@ -23,6 +23,14 @@ import {
   saveConnectedHandles
 } from "../utils/novaFileConnections";
 import { parseDataStoreContainers } from "../utils/dataStoreContainersParser";
+import { parseDataStoreInventory } from "../utils/dataStoreInventoryParser";
+import { parseDataStoreCharacters } from "../utils/dataStoreCharactersParser";
+import {
+  characterProfileKey,
+  detectDataStoreSourceType,
+  mergeCharacterProfiles,
+  mergeInventoryProfiles
+} from "../utils/dataStoreProfileHelpers";
 import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
@@ -808,21 +816,95 @@ function DashboardPage() {
     }
 
     const parsedItems = [];
+    const parsedInventoryProfiles = [];
+    const parsedCharacterProfiles = [];
     for (const source of luaTexts) {
-      parsedItems.push(
-        ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
-      );
+      const sourceType = detectDataStoreSourceType(source.fileName, source.text);
+      if (sourceType === "containers") {
+        parsedItems.push(
+          ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
+        );
+      }
+      if (sourceType === "inventory") {
+        parsedInventoryProfiles.push(
+          ...parseDataStoreInventory(source.text, source.fileName || "", source.accountHintName || "")
+        );
+      }
+      if (sourceType === "characters") {
+        parsedCharacterProfiles.push(
+          ...parseDataStoreCharacters(source.text, source.fileName || "", source.accountHintName || "")
+        );
+      }
     }
 
-    if (!parsedItems.length) {
+    if (!parsedItems.length && !parsedInventoryProfiles.length && !parsedCharacterProfiles.length) {
       if (!silent) {
-        setSyncMessage("No inventory items were found in the selected DataStore_Containers files.");
+        setSyncMessage("No DataStore inventory or character data was found in the selected files.");
       }
       return;
     }
 
-    await replaceInventoryItems(user.uid, parsedItems);
-  }, [user]);
+    if (parsedItems.length) {
+      await replaceInventoryItems(user.uid, parsedItems);
+    }
+
+    const charactersByKey = new Map(
+      data.characters.map((character) => [characterProfileKey(character.name, character.realm), character])
+    );
+
+    const mergedInventoryProfiles = mergeInventoryProfiles(parsedInventoryProfiles);
+    const mergedCharacterProfiles = mergeCharacterProfiles(parsedCharacterProfiles);
+    const profileOps = [];
+
+    mergedInventoryProfiles.forEach((profile) => {
+      const character = charactersByKey.get(characterProfileKey(profile.characterName, profile.realm));
+      if (!character) {
+        return;
+      }
+
+      profileOps.push(
+        updateCharacter(character.id, {
+          averageItemLevel: typeof profile.averageItemLevel === "number" ? profile.averageItemLevel : null,
+          overallItemLevel: typeof profile.overallItemLevel === "number" ? profile.overallItemLevel : null,
+          equippedItems: Array.isArray(profile.equippedItems) ? profile.equippedItems : [],
+          lastInventoryUpdate: profile.lastInventoryUpdate || null,
+          lastInventorySyncAt: new Date().toISOString()
+        })
+      );
+    });
+
+    mergedCharacterProfiles.forEach((profile) => {
+      const character = charactersByKey.get(characterProfileKey(profile.characterName, profile.realm));
+      if (!character) {
+        return;
+      }
+
+      const updates = {
+        zone: profile.zone || "",
+        subZone: profile.subZone || "",
+        bindLocation: profile.bindLocation || "",
+        guildName: profile.guildName || "",
+        guildRankName: profile.guildRankName || "",
+        guildRankIndex: typeof profile.guildRankIndex === "number" ? profile.guildRankIndex : null,
+        money: typeof profile.money === "number" ? profile.money : null,
+        isResting: typeof profile.isResting === "boolean" ? profile.isResting : null,
+        played: typeof profile.played === "number" ? profile.played : null,
+        playedThisLevel: typeof profile.playedThisLevel === "number" ? profile.playedThisLevel : null,
+        xp: typeof profile.xp === "number" ? profile.xp : null,
+        xpMax: typeof profile.xpMax === "number" ? profile.xpMax : null,
+        restXp: typeof profile.restXp === "number" ? profile.restXp : null,
+        lastCharacterUpdate: profile.lastCharacterUpdate || null,
+        lastLogoutTimestamp: profile.lastLogoutTimestamp || null,
+        lastCharacterSyncAt: new Date().toISOString()
+      };
+
+      profileOps.push(updateCharacter(character.id, updates));
+    });
+
+    if (profileOps.length) {
+      await Promise.all(profileOps);
+    }
+  }, [user, data.characters]);
 
   const onSyncFromConnectedFiles = useCallback(async (silent = false) => {
     if (!window.indexedDB) {
