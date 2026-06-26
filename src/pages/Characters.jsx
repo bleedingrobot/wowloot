@@ -82,6 +82,38 @@ function getBisItemNameById(itemId) {
   return BIS_ITEM_NAME_BY_ID[id] || `Item #${id}`;
 }
 
+function normalizeBisItems(bisEntry) {
+  if (!Array.isArray(bisEntry)) {
+    return [];
+  }
+
+  return bisEntry
+    .map((entry) => {
+      if (typeof entry === "number" || typeof entry === "string") {
+        const itemId = Number(entry);
+        if (!Number.isFinite(itemId) || itemId <= 0) {
+          return null;
+        }
+        return { itemId, name: getBisItemNameById(itemId) };
+      }
+
+      if (entry && typeof entry === "object") {
+        const itemId = Number(entry.itemId);
+        if (!Number.isFinite(itemId) || itemId <= 0) {
+          return null;
+        }
+        const explicitName = String(entry.itemName || "").trim();
+        return {
+          itemId,
+          name: explicitName || getBisItemNameById(itemId)
+        };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+}
+
 function buildWowheadItemUrl(itemId) {
   const id = Number(itemId);
   if (!Number.isFinite(id) || id <= 0) {
@@ -208,9 +240,8 @@ function CharactersPage() {
     Object.entries(selectedBisBySlot).forEach(([slotText, bisItemIds]) => {
       const slot = Number(slotText);
       const equipped = selectedEquipmentBySlot.get(slot) || null;
-      const normalizedBisIds = Array.isArray(bisItemIds)
-        ? bisItemIds.map((id) => Number(id)).filter((id) => Number.isFinite(id) && id > 0)
-        : [];
+      const normalizedBisItems = normalizeBisItems(bisItemIds);
+      const normalizedBisIds = normalizedBisItems.map((item) => item.itemId);
 
       const equippedId = Number(equipped?.itemId || 0);
       const isBis = equippedId > 0 && normalizedBisIds.includes(equippedId);
@@ -220,10 +251,7 @@ function CharactersPage() {
         slotName: SLOT_LABELS[slot] || `Slot ${slot}`,
         equipped,
         bisItemIds: normalizedBisIds,
-        bisItems: normalizedBisIds.map((itemId) => ({
-          itemId,
-          name: getBisItemNameById(itemId)
-        })),
+        bisItems: normalizedBisItems,
         status: isBis ? "bis" : equipped ? "upgrade" : "missing"
       });
     });

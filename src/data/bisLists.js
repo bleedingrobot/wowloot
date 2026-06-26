@@ -310,22 +310,64 @@ export const BIS_ITEM_IDS_BY_SPEC = {
     18: [22820, 22821, 21603, 19861, 13396]
   },
   "warrior-fury-p6": {
-    1: [12640],
-    2: [21664],
-    3: [21330],
-    5: [23226],
-    6: [19823],
-    7: [22385],
-    8: [21490],
-    9: [21602],
-    10: [21672],
-    11: [23038, 18821, 21677, 19432, 19384],
-    12: [23038, 18821, 21677, 19432, 19384],
-    13: [22954, 23206, 23041, 20130, 23570],
-    14: [22954, 23206, 23041, 20130, 23570],
-    15: [21701],
-    16: [23054, 23577, 22808, 17112, 23221],
-    17: [23577, 22808, 23014, 23456, 19352],
-    18: [22812, 22811, 23557, 21459, 17069]
+    1: [{ itemId: 12640, itemName: "Lionheart Helm" }],
+    2: [{ itemId: 21664, itemName: "Barbed Choker" }],
+    3: [{ itemId: 21330, itemName: "Conqueror's Spaulders" }],
+    5: [{ itemId: 23226, itemName: "Ghoul Skin Tunic" }],
+    6: [{ itemId: 19823, itemName: "Zandalar Vindicator's Belt" }],
+    7: [{ itemId: 22385, itemName: "Titanic Leggings" }],
+    8: [{ itemId: 21490, itemName: "Slime Kickers" }],
+    9: [{ itemId: 21602, itemName: "Qiraji Execution Bracers" }],
+    10: [{ itemId: 21672, itemName: "Gloves of Enforcement" }],
+    11: [
+      { itemId: 23038, itemName: "Band of Unnatural Forces" },
+      { itemId: 18821, itemName: "Quick Strike Ring" },
+      { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
+      { itemId: 19432, itemName: "Circle of Applied Force" },
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" }
+    ],
+    12: [
+      { itemId: 23038, itemName: "Band of Unnatural Forces" },
+      { itemId: 18821, itemName: "Quick Strike Ring" },
+      { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
+      { itemId: 19432, itemName: "Circle of Applied Force" },
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" }
+    ],
+    13: [
+      { itemId: 22954, itemName: "Kiss of the Spider" },
+      { itemId: 23206, itemName: "Mark of the Champion" },
+      { itemId: 23041, itemName: "Slayer's Crest" },
+      { itemId: 20130, itemName: "Diamond Flask" },
+      { itemId: 23570, itemName: "Jom Gabbar" }
+    ],
+    14: [
+      { itemId: 22954, itemName: "Kiss of the Spider" },
+      { itemId: 23206, itemName: "Mark of the Champion" },
+      { itemId: 23041, itemName: "Slayer's Crest" },
+      { itemId: 20130, itemName: "Diamond Flask" },
+      { itemId: 23570, itemName: "Jom Gabbar" }
+    ],
+    15: [{ itemId: 21701, itemName: "Cloak of Concentrated Hatred" }],
+    16: [
+      { itemId: 23054, itemName: "Gressil, Dawn of Ruin" },
+      { itemId: 23577, itemName: "The Hungering Cold" },
+      { itemId: 22808, itemName: "The Castigator" },
+      { itemId: 17112, itemName: "Empyrean Demolisher" },
+      { itemId: 23221, itemName: "Misplaced Servo Arm" }
+    ],
+    17: [
+      { itemId: 23577, itemName: "The Hungering Cold" },
+      { itemId: 22808, itemName: "The Castigator" },
+      { itemId: 23014, itemName: "Iblis, Blade of the Fallen Seraph" },
+      { itemId: 23456, itemName: "Grand Marshal's Swiftblade" },
+      { itemId: 19352, itemName: "Chromatically Tempered Sword" }
+    ],
+    18: [
+      { itemId: 22812, itemName: "Nerubian Slavemaker" },
+      { itemId: 22811, itemName: "Soulstring" },
+      { itemId: 23557, itemName: "Larvae of the Great Worm" },
+      { itemId: 21459, itemName: "Crossbow of Imminent Doom" },
+      { itemId: 17069, itemName: "Striker's Mark" }
+    ]
   }
 };
