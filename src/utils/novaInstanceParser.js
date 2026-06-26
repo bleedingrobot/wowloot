@@ -444,7 +444,7 @@ export function parseNovaWorldBuffs(luaText) {
       const key = keyedOpen[1];
       const parent = stack[stack.length - 1];
 
-      if (!parent && key === "global") {
+      if (key === "global") {
         pushContext({ kind: "global", key });
         return;
       }
