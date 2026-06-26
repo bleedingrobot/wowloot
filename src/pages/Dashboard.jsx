@@ -1044,16 +1044,19 @@ function DashboardPage() {
                 onChange={(event) => setBuffChipVisibility(event.target.value)}
               >
                 <option value="all">Show all chips</option>
-                <option value="issues">Show booned + missing</option>
+                <option value="booned">Show booned</option>
+                <option value="missing">Show missing</option>
               </select>
               </div>
               <ul className="simple-list buff-readiness-list">
                 {filteredBuffReadinessRows.length ? (
                   filteredBuffReadinessRows.map((row) => {
                     const visibleBuffStatuses =
-                      buffChipVisibility === "issues"
-                        ? row.buffStatuses.filter((buff) => buff.status !== "active")
-                        : row.buffStatuses;
+                      buffChipVisibility === "booned"
+                        ? row.buffStatuses.filter((buff) => buff.status === "booned")
+                        : buffChipVisibility === "missing"
+                          ? row.buffStatuses.filter((buff) => buff.status === "missing")
+                          : row.buffStatuses;
 
                     return (
                       <li key={row.characterId} className="buff-readiness-item">
