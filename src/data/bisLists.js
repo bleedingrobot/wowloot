@@ -2,6 +2,7 @@
   Druid: [
     { key: "druid-balance-p6", label: "Balance (Phase 6)" },
     { key: "druid-feral-dps-p6", label: "Feral DPS (Phase 6)" },
+    { key: "druid-feral-tank-p6", label: "Feral Tank (Phase 6)" },
     { key: "druid-resto-p6", label: "Restoration (Phase 6)" }
   ],
   Hunter: [
@@ -37,6 +38,7 @@
 export const BIS_GUIDE_URL_BY_SPEC = {
   "druid-balance-p6": "https://www.wowhead.com/classic/guide/wow-classic-balance-druid-dps-naxxramas-best-in-slot-gear",
   "druid-feral-dps-p6": "https://www.wowhead.com/classic/guide/wow-classic-feral-druid-dps-naxxramas-best-in-slot-gear",
+  "druid-feral-tank-p6": "https://www.wowhead.com/classic/guide/wow-classic-feral-druid-tank-naxxramas-best-in-slot-gear",
   "druid-resto-p6": "https://www.wowhead.com/classic/guide/wow-classic-druid-healing-naxxramas-best-in-slot-gear",
   "hunter-dps-p6": "https://www.wowhead.com/classic/guide/wow-classic-hunter-dps-naxxramas-best-in-slot-gear",
   "mage-dps-p6": "https://www.wowhead.com/classic/guide/wow-classic-mage-dps-naxxramas-best-in-slot-gear",
@@ -55,56 +57,495 @@ export const BIS_GUIDE_URL_BY_SPEC = {
 // Slot IDs follow WoW inventory slot numbering used by DataStore_Inventory.
 export const BIS_ITEM_IDS_BY_SPEC = {
   "druid-balance-p6": {
-    1: [19375],
-    2: [23057],
-    3: [22983],
-    5: [21838],
-    6: [22730],
-    7: [19683],
-    8: [19684],
-    9: [21186],
-    10: [21585],
-    11: [21709, 23031, 23025, 19403, 21836],
-    12: [21709, 23031, 23025, 19403, 21836],
-    13: [23207, 19379, 23046, 19950, 19812],
-    14: [23207, 19379, 23046, 19950, 19812],
-    15: [23050],
-    16: [22988, 19360, 22803, 19347]
+    1: [
+      { itemId: 19375, itemName: "Mish'undare, Circlet of the Mind Flayer" },
+      { itemId: 23035, itemName: "Preceptor's Hat" },
+      { itemId: 22267, itemName: "Spellweaver's Turban" },
+      { itemId: 19886, itemName: "The Hexxer's Cover" }
+    ],
+    2: [
+      { itemId: 23057, itemName: "Gem of Trapped Innocents" },
+      { itemId: 21608, itemName: "Amulet of Vek'nilash" },
+      { itemId: 18814, itemName: "Choker of the Fire Lord" },
+      { itemId: 22943, itemName: "Malice Stone Pendant" },
+      { itemId: 19613, itemName: "Pristine Enchanted South Seas Kelp" }
+    ],
+    3: [
+      { itemId: 22983, itemName: "Rime Covered Mantle" },
+      { itemId: 19370, itemName: "Mantle of the Blackwing Cabal" },
+      { itemId: 20686, itemName: "Abyssal Cloth Amice" },
+      { itemId: 10263, itemName: "Adventurer's Shoulders" }
+    ],
+    5: [
+      { itemId: 21838, itemName: "Garb of Royal Ascension" },
+      { itemId: 19682, itemName: "Bloodvine Vest" },
+      { itemId: 23220, itemName: "Crystal Webbed Robe" },
+      { itemId: 23085, itemName: "Robe of Undead Cleansing" },
+      { itemId: 20635, itemName: "Jade Inlaid Vestments" }
+    ],
+    6: [
+      { itemId: 22730, itemName: "Eyestalk Waist Cord" },
+      { itemId: 19400, itemName: "Firemaw's Clutch" },
+      { itemId: 19136, itemName: "Mana Igniting Cord" },
+      { itemId: 22716, itemName: "Belt of Untapped Power" },
+      { itemId: 19388, itemName: "Angelista's Grasp" }
+    ],
+    7: [
+      { itemId: 19683, itemName: "Bloodvine Leggings" },
+      { itemId: 23070, itemName: "Leggings of Polarity" },
+      { itemId: 21461, itemName: "Leggings of the Black Blizzard" },
+      { itemId: 19165, itemName: "Flarecore Leggings" }
+    ],
+    8: [
+      { itemId: 19684, itemName: "Bloodvine Boots" },
+      { itemId: 21600, itemName: "Boots of Epiphany" },
+      { itemId: 20634, itemName: "Boots of Fright" },
+      { itemId: 19131, itemName: "Snowblind Shoes" },
+      { itemId: 19897, itemName: "Betrayer's Boots" }
+    ],
+    9: [
+      { itemId: 21186, itemName: "Rockfury Bracers" },
+      { itemId: 19374, itemName: "Bracers of Arcane Accuracy" },
+      { itemId: 21611, itemName: "Burrower Bracers" },
+      { itemId: 23021, itemName: "The Soul Harvester's Bindings" },
+      { itemId: 23091, itemName: "Bracers of Undead Cleansing" }
+    ],
+    10: [
+      { itemId: 21585, itemName: "Dark Storm Gauntlets" },
+      { itemId: 23084, itemName: "Gloves of Undead Cleansing" },
+      { itemId: 21689, itemName: "Gloves of Ebru" },
+      { itemId: 19929, itemName: "Bloodtinged Gloves" },
+      { itemId: 13258, itemName: "Slaghide Gauntlets" }
+    ],
+    11: [
+      { itemId: 21709, itemName: "Ring of the Fallen God" },
+      { itemId: 23031, itemName: "Band of the Inevitable" },
+      { itemId: 23025, itemName: "Seal of the Damned" },
+      { itemId: 19403, itemName: "Band of Forced Concentration" },
+      { itemId: 21836, itemName: "Ritssyn's Ring of Chaos" }
+    ],
+    12: [
+      { itemId: 21709, itemName: "Ring of the Fallen God" },
+      { itemId: 23031, itemName: "Band of the Inevitable" },
+      { itemId: 23025, itemName: "Seal of the Damned" },
+      { itemId: 19403, itemName: "Band of Forced Concentration" },
+      { itemId: 21836, itemName: "Ritssyn's Ring of Chaos" }
+    ],
+    13: [
+      { itemId: 23207, itemName: "Mark of the Champion" },
+      { itemId: 19379, itemName: "Neltharion's Tear" },
+      { itemId: 23046, itemName: "The Restrained Essence of Sapphiron" },
+      { itemId: 19950, itemName: "Zandalarian Hero Charm" },
+      { itemId: 19812, itemName: "Rune of the Dawn" },
+      { itemId: 18820, itemName: "Talisman of Ephemeral Power" },
+      { itemId: 12930, itemName: "Briarwood Reed" }
+    ],
+    14: [
+      { itemId: 23207, itemName: "Mark of the Champion" },
+      { itemId: 19379, itemName: "Neltharion's Tear" },
+      { itemId: 23046, itemName: "The Restrained Essence of Sapphiron" },
+      { itemId: 19950, itemName: "Zandalarian Hero Charm" },
+      { itemId: 19812, itemName: "Rune of the Dawn" },
+      { itemId: 18820, itemName: "Talisman of Ephemeral Power" },
+      { itemId: 12930, itemName: "Briarwood Reed" }
+    ],
+    15: [
+      { itemId: 23050, itemName: "Cloak of the Necropolis" },
+      { itemId: 22731, itemName: "Cloak of the Devoured" },
+      { itemId: 19857, itemName: "Cloak of Consumption" },
+      { itemId: 19378, itemName: "Cloak of the Brood Lord" },
+      { itemId: 23017, itemName: "Veil of Eclipse" }
+    ],
+    16: [
+      { itemId: 22800, itemName: "Brimstone Staff" },
+      { itemId: 22799, itemName: "Soulseeker" },
+      { itemId: 21273, itemName: "Blessed Qiraji Acolyte Staff" },
+      { itemId: 19356, itemName: "Staff of the Shadow Flame" },
+      { itemId: 22988, itemName: "The End of Dreams" },
+      { itemId: 19360, itemName: "Lok'amir il Romathis" },
+      { itemId: 22803, itemName: "Midnight Haze" },
+      { itemId: 19347, itemName: "Claw of Chromaggus" }
+    ],
+    17: [
+      { itemId: 23049, itemName: "Sapphiron's Left Eye" },
+      { itemId: 21597, itemName: "Royal Scepter of Vek'lor" },
+      { itemId: 19891, itemName: "Jin'do's Bag of Whammies" },
+      { itemId: 22329, itemName: "Scepter of Interminable Focus" },
+      { itemId: 21471, itemName: "Talon of Furious Concentration" }
+    ]
   },
   "druid-feral-dps-p6": {
-    1: [8345],
-    2: [19377],
-    3: [21665],
-    5: [21680],
-    6: [21586],
-    7: [23071],
-    8: [21493],
-    9: [21602],
-    10: [21672, 9449],
-    11: [23038, 21205, 17063],
-    12: [23038, 21205, 17063],
-    13: [23041, 19406, 23206, 22954],
-    14: [23041, 19406, 23206, 22954],
-    15: [21701],
-    16: [9449, 22632]
+    1: [
+      { itemId: 8345, itemName: "Wolfshead Helm" },
+      { itemId: 21455, itemName: "Southwind Helm" }
+    ],
+    2: [
+      { itemId: 19377, itemName: "Prestor's Talisman of Connivery" },
+      { itemId: 23053, itemName: "Stormrage's Talisman of Seething" },
+      { itemId: 21664, itemName: "Barbed Choker" },
+      { itemId: 18404, itemName: "Onyxia Tooth Pendant" }
+    ],
+    3: [
+      { itemId: 21665, itemName: "Mantle of Wicked Revenge" },
+      { itemId: 21474, itemName: "Chitinous Shoulderguards" }
+    ],
+    5: [
+      { itemId: 21680, itemName: "Vest of Swift Execution" },
+      { itemId: 23226, itemName: "Ghoul Skin Tunic" }
+    ],
+    6: [
+      { itemId: 21586, itemName: "Belt of Never-Ending Agony" },
+      { itemId: 20216, itemName: "Belt of Preserved Heads" }
+    ],
+    7: [
+      { itemId: 23071, itemName: "Leggings of Apocalypse" },
+      { itemId: 16450, itemName: "Marshal's Dragonhide Legguards" },
+      { itemId: 16552, itemName: "General's Dragonhide Leggings" },
+      { itemId: 15062, itemName: "Devilsaur Leggings" }
+    ],
+    8: [
+      { itemId: 21493, itemName: "Boots of the Vanguard" },
+      { itemId: 19381, itemName: "Boots of the Shadow Flame" }
+    ],
+    9: [
+      { itemId: 21602, itemName: "Qiraji Execution Bracers" },
+      { itemId: 19146, itemName: "Wristguards of Stability" }
+    ],
+    10: [
+      { itemId: 21672, itemName: "Gloves of Enforcement" },
+      { itemId: 15063, itemName: "Devilsaur Gauntlets" }
+    ],
+    11: [
+      { itemId: 23038, itemName: "Band of Unnatural Forces" },
+      { itemId: 21205, itemName: "Signet Ring of the Bronze Dragonflight" },
+      { itemId: 17063, itemName: "Band of Accuria" },
+      { itemId: 18821, itemName: "Quick Strike Ring" },
+      { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" },
+      { itemId: 19432, itemName: "Circle of Applied Force" }
+    ],
+    12: [
+      { itemId: 23038, itemName: "Band of Unnatural Forces" },
+      { itemId: 21205, itemName: "Signet Ring of the Bronze Dragonflight" },
+      { itemId: 17063, itemName: "Band of Accuria" },
+      { itemId: 18821, itemName: "Quick Strike Ring" },
+      { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" },
+      { itemId: 19432, itemName: "Circle of Applied Force" }
+    ],
+    13: [
+      { itemId: 23041, itemName: "Slayer's Crest" },
+      { itemId: 19406, itemName: "Drake Fang Talisman" },
+      { itemId: 23206, itemName: "Mark of the Champion" },
+      { itemId: 22954, itemName: "Kiss of the Spider" },
+      { itemId: 21670, itemName: "Badge of the Swarmguard" },
+      { itemId: 21180, itemName: "Earthstrike" }
+    ],
+    14: [
+      { itemId: 23041, itemName: "Slayer's Crest" },
+      { itemId: 19406, itemName: "Drake Fang Talisman" },
+      { itemId: 23206, itemName: "Mark of the Champion" },
+      { itemId: 22954, itemName: "Kiss of the Spider" },
+      { itemId: 21670, itemName: "Badge of the Swarmguard" },
+      { itemId: 21180, itemName: "Earthstrike" }
+    ],
+    15: [
+      { itemId: 21701, itemName: "Cloak of Concentrated Hatred" },
+      { itemId: 21710, itemName: "Cloak of the Fallen God" },
+      { itemId: 23045, itemName: "Shroud of Dominion" },
+      { itemId: 18541, itemName: "Puissant Cape" }
+    ],
+    16: [
+      { itemId: 9449, itemName: "Manual Crowd Pummeler" },
+      { itemId: 22632, itemName: "Atiesh, Greatstaff of the Guardian" }
+    ],
+    18: [
+      { itemId: 22397, itemName: "Idol of Ferocity" }
+    ]
+  },
+  "druid-feral-tank-p6": {
+    1: [
+      { itemId: 16451, itemName: "Field Marshal's Dragonhide Helmet" },
+      { itemId: 16550, itemName: "Warlord's Dragonhide Helmet" },
+      { itemId: 8345, itemName: "Wolfshead Helm" },
+      { itemId: 21455, itemName: "Southwind Helm" }
+    ],
+    2: [
+      { itemId: 23053, itemName: "Stormrage's Talisman of Seething" },
+      { itemId: 19377, itemName: "Prestor's Talisman of Connivery" },
+      { itemId: 21664, itemName: "Barbed Choker" },
+      { itemId: 18404, itemName: "Onyxia Tooth Pendant" }
+    ],
+    3: [
+      { itemId: 21665, itemName: "Mantle of Wicked Revenge" },
+      { itemId: 21474, itemName: "Chitinous Shoulderguards" }
+    ],
+    5: [
+      { itemId: 23226, itemName: "Ghoul Skin Tunic" },
+      { itemId: 21680, itemName: "Vest of Swift Execution" }
+    ],
+    6: [
+      { itemId: 21586, itemName: "Belt of Never-Ending Agony" },
+      { itemId: 20216, itemName: "Belt of Preserved Heads" }
+    ],
+    7: [
+      { itemId: 23071, itemName: "Leggings of Apocalypse" },
+      { itemId: 15062, itemName: "Devilsaur Leggings" }
+    ],
+    8: [
+      { itemId: 21493, itemName: "Boots of the Vanguard" },
+      { itemId: 19381, itemName: "Boots of the Shadow Flame" }
+    ],
+    9: [
+      { itemId: 21602, itemName: "Qiraji Execution Bracers" },
+      { itemId: 19146, itemName: "Wristguards of Stability" }
+    ],
+    10: [
+      { itemId: 16448, itemName: "Marshal's Dragonhide Gauntlets" },
+      { itemId: 16555, itemName: "General's Dragonhide Gloves" },
+      { itemId: 21672, itemName: "Gloves of Enforcement" },
+      { itemId: 21605, itemName: "Gloves of the Hidden Temple" },
+      { itemId: 15063, itemName: "Devilsaur Gauntlets" }
+    ],
+    11: [
+      { itemId: 23038, itemName: "Band of Unnatural Forces" },
+      { itemId: 21205, itemName: "Signet Ring of the Bronze Dragonflight" },
+      { itemId: 17063, itemName: "Band of Accuria" },
+      { itemId: 18821, itemName: "Quick Strike Ring" },
+      { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" },
+      { itemId: 19432, itemName: "Circle of Applied Force" }
+    ],
+    12: [
+      { itemId: 23038, itemName: "Band of Unnatural Forces" },
+      { itemId: 21205, itemName: "Signet Ring of the Bronze Dragonflight" },
+      { itemId: 17063, itemName: "Band of Accuria" },
+      { itemId: 18821, itemName: "Quick Strike Ring" },
+      { itemId: 21677, itemName: "Ring of the Qiraji Fury" },
+      { itemId: 19384, itemName: "Master Dragonslayer's Ring" },
+      { itemId: 19432, itemName: "Circle of Applied Force" }
+    ],
+    13: [
+      { itemId: 22954, itemName: "Kiss of the Spider" },
+      { itemId: 23041, itemName: "Slayer's Crest" },
+      { itemId: 19406, itemName: "Drake Fang Talisman" },
+      { itemId: 21180, itemName: "Earthstrike" }
+    ],
+    14: [
+      { itemId: 22954, itemName: "Kiss of the Spider" },
+      { itemId: 23041, itemName: "Slayer's Crest" },
+      { itemId: 19406, itemName: "Drake Fang Talisman" },
+      { itemId: 21180, itemName: "Earthstrike" }
+    ],
+    15: [
+      { itemId: 21710, itemName: "Cloak of the Fallen God" },
+      { itemId: 21701, itemName: "Cloak of Concentrated Hatred" },
+      { itemId: 23045, itemName: "Shroud of Dominion" },
+      { itemId: 18541, itemName: "Puissant Cape" }
+    ],
+    16: [
+      { itemId: 9449, itemName: "Manual Crowd Pummeler" },
+      { itemId: 22632, itemName: "Atiesh, Greatstaff of the Guardian" },
+      { itemId: 21268, itemName: "Blessed Qiraji War Hammer" },
+      { itemId: 20580, itemName: "Hammer of Bestial Fury" }
+    ],
+    18: [
+      { itemId: 23198, itemName: "Idol of Brutality" }
+    ]
   },
   "druid-resto-p6": {
-    1: [16900],
-    2: [23036],
-    3: [16902],
-    5: [16897],
-    6: [16903],
-    7: [16901],
-    8: [16898],
-    9: [16904],
-    10: [16899],
-    11: [22939, 19382, 21620, 19140, 19863],
-    12: [22939, 19382, 21620, 19140, 19863],
-    13: [19955, 23047, 19395, 20636, 19950],
-    14: [19955, 23047, 19395, 20636, 19950],
-    15: [22960],
-    16: [23056, 21839, 22942, 23464, 21523, 22632, 22801, 21275],
-    17: [23048, 23029, 21666, 19312, 22329]
+    1: [
+      { itemId: 16900, itemName: "Stormrage Cover" },
+      { itemId: 19132, itemName: "Crystal Adorned Crown" },
+      { itemId: 22490, itemName: "Dreamwalker Headpiece" },
+      { itemId: 20628, itemName: "Deviate Growth Cap" },
+      { itemId: 21615, itemName: "Don Rigoberto's Lost Hat" },
+      { itemId: 21669, itemName: "Creeping Vine Helm" },
+      { itemId: 22720, itemName: "Zulian Headdress" },
+      { itemId: 13102, itemName: "Cassandra's Grace" },
+      { itemId: 18727, itemName: "Crimson Felt Hat" }
+    ],
+    2: [
+      { itemId: 23036, itemName: "Necklace of Necropsy" },
+      { itemId: 21712, itemName: "Amulet of the Fallen God" },
+      { itemId: 21507, itemName: "Amulet of the Shifting Sands" },
+      { itemId: 19885, itemName: "Jin'do's Evil Eye" },
+      { itemId: 18723, itemName: "Animated Chain Necklace" },
+      { itemId: 19371, itemName: "Pendant of the Fallen Dragon" },
+      { itemId: 17109, itemName: "Choker of Enlightenment" },
+      { itemId: 22327, itemName: "Amulet of the Redeemed" }
+    ],
+    3: [
+      { itemId: 16902, itemName: "Stormrage Pauldrons" },
+      { itemId: 18810, itemName: "Wild Growth Spaulders" },
+      { itemId: 22491, itemName: "Dreamwalker Spaulders" },
+      { itemId: 21694, itemName: "Ternary Mantle" },
+      { itemId: 19928, itemName: "Animist's Spaulders" },
+      { itemId: 15061, itemName: "Living Shoulders" },
+      { itemId: 22234, itemName: "Mantle of Lost Hope" },
+      { itemId: 22405, itemName: "Mantle of the Scarlet Crusade" }
+    ],
+    5: [
+      { itemId: 16897, itemName: "Stormrage Chestguard" },
+      { itemId: 22488, itemName: "Dreamwalker Tunic" },
+      { itemId: 21663, itemName: "Robes of the Guardian Saint" },
+      { itemId: 13346, itemName: "Robes of the Exalted" },
+      { itemId: 22272, itemName: "Forest's Embrace" }
+    ],
+    6: [
+      { itemId: 16903, itemName: "Stormrage Belt" },
+      { itemId: 22494, itemName: "Dreamwalker Girdle" },
+      { itemId: 19162, itemName: "Corehound Belt" },
+      { itemId: 21609, itemName: "Regenerating Belt of Vek'nilash" },
+      { itemId: 21582, itemName: "Grasp of the Old God" },
+      { itemId: 18391, itemName: "Eyestalk Cord" },
+      { itemId: 19400, itemName: "Firemaw's Clutch" },
+      { itemId: 18327, itemName: "Whipvine Cord" },
+      { itemId: 19388, itemName: "Angelista's Grasp" },
+      { itemId: 11662, itemName: "Ban'thok Sash" }
+    ],
+    7: [
+      { itemId: 16901, itemName: "Stormrage Legguards" },
+      { itemId: 19385, itemName: "Empowered Leggings" },
+      { itemId: 22489, itemName: "Dreamwalker Legguards" },
+      { itemId: 18875, itemName: "Salamander Scale Pants" },
+      { itemId: 18682, itemName: "Ghoul Skin Leggings" },
+      { itemId: 18386, itemName: "Padre's Trousers" },
+      { itemId: 11841, itemName: "Senior Designer's Pantaloons" },
+      { itemId: 19899, itemName: "Ritualistic Legguards" }
+    ],
+    8: [
+      { itemId: 16898, itemName: "Stormrage Boots" },
+      { itemId: 19437, itemName: "Boots of Pure Thought" },
+      { itemId: 22492, itemName: "Dreamwalker Boots" },
+      { itemId: 13954, itemName: "Verdant Footpads" },
+      { itemId: 21810, itemName: "Treads of the Wandering Nomad" },
+      { itemId: 19131, itemName: "Snowblind Shoes" },
+      { itemId: 19897, itemName: "Betrayer's Boots" },
+      { itemId: 18322, itemName: "Waterspout Boots" },
+      { itemId: 22247, itemName: "Faith Healer's Boots" },
+      { itemId: 18507, itemName: "Boots of the Full Moon" }
+    ],
+    9: [
+      { itemId: 16904, itemName: "Stormrage Bracers" },
+      { itemId: 22495, itemName: "Dreamwalker Wristguards" },
+      { itemId: 21604, itemName: "Bracelets of Royal Redemption" },
+      { itemId: 19840, itemName: "Zandalar Haruspex's Bracers" },
+      { itemId: 19595, itemName: "Dryad's Wrist Bindings" },
+      { itemId: 18525, itemName: "Bracers of Prosperity" },
+      { itemId: 13208, itemName: "Bleak Howler Armguards" },
+      { itemId: 18497, itemName: "Sublime Wristguards" }
+    ],
+    10: [
+      { itemId: 16899, itemName: "Stormrage Handguards" },
+      { itemId: 22493, itemName: "Dreamwalker Handguards" },
+      { itemId: 21617, itemName: "Wasphide Gauntlets" },
+      { itemId: 21462, itemName: "Gloves of Dark Wisdom" },
+      { itemId: 21619, itemName: "Gloves of the Messiah" },
+      { itemId: 18309, itemName: "Gloves of Restoration" },
+      { itemId: 12554, itemName: "Hands of the Exalted Herald" },
+      { itemId: 13253, itemName: "Hands of Power" }
+    ],
+    11: [
+      { itemId: 22939, itemName: "Band of Unanswered Prayers" },
+      { itemId: 19382, itemName: "Pure Elementium Band" },
+      { itemId: 21620, itemName: "Ring of the Martyr" },
+      { itemId: 19140, itemName: "Cauterizing Band" },
+      { itemId: 19863, itemName: "Primalist's Seal" },
+      { itemId: 19920, itemName: "Primalist's Band" },
+      { itemId: 13178, itemName: "Rosewine Circle" },
+      { itemId: 22334, itemName: "Band of Mending" },
+      { itemId: 16058, itemName: "Fordring's Seal" },
+      { itemId: 19397, itemName: "Ring of Blackrock" },
+      { itemId: 22339, itemName: "Rune Band of Wizardry" }
+    ],
+    12: [
+      { itemId: 22939, itemName: "Band of Unanswered Prayers" },
+      { itemId: 19382, itemName: "Pure Elementium Band" },
+      { itemId: 21620, itemName: "Ring of the Martyr" },
+      { itemId: 19140, itemName: "Cauterizing Band" },
+      { itemId: 19863, itemName: "Primalist's Seal" },
+      { itemId: 19920, itemName: "Primalist's Band" },
+      { itemId: 13178, itemName: "Rosewine Circle" },
+      { itemId: 22334, itemName: "Band of Mending" },
+      { itemId: 16058, itemName: "Fordring's Seal" },
+      { itemId: 19397, itemName: "Ring of Blackrock" },
+      { itemId: 22339, itemName: "Rune Band of Wizardry" }
+    ],
+    13: [
+      { itemId: 19955, itemName: "Wushoolay's Charm of Nature" },
+      { itemId: 23047, itemName: "Eye of the Dead" },
+      { itemId: 19395, itemName: "Rejuvenating Gem" },
+      { itemId: 20636, itemName: "Hibernation Crystal" },
+      { itemId: 19950, itemName: "Zandalarian Hero Charm" },
+      { itemId: 18469, itemName: "Royal Seal of Eldre'Thalas" },
+      { itemId: 12930, itemName: "Briarwood Reed" },
+      { itemId: 22268, itemName: "Draconic Infused Emblem" },
+      { itemId: 21625, itemName: "Scarab Brooch" },
+      { itemId: 11819, itemName: "Second Wind" },
+      { itemId: 11832, itemName: "Burst of Knowledge" }
+    ],
+    14: [
+      { itemId: 19955, itemName: "Wushoolay's Charm of Nature" },
+      { itemId: 23047, itemName: "Eye of the Dead" },
+      { itemId: 19395, itemName: "Rejuvenating Gem" },
+      { itemId: 20636, itemName: "Hibernation Crystal" },
+      { itemId: 19950, itemName: "Zandalarian Hero Charm" },
+      { itemId: 18469, itemName: "Royal Seal of Eldre'Thalas" },
+      { itemId: 12930, itemName: "Briarwood Reed" },
+      { itemId: 22268, itemName: "Draconic Infused Emblem" },
+      { itemId: 21625, itemName: "Scarab Brooch" },
+      { itemId: 11819, itemName: "Second Wind" },
+      { itemId: 11832, itemName: "Burst of Knowledge" }
+    ],
+    15: [
+      { itemId: 22960, itemName: "Cloak of Suturing" },
+      { itemId: 21583, itemName: "Cloak of Clarity" },
+      { itemId: 18510, itemName: "Hide of the Wild" },
+      { itemId: 19430, itemName: "Shroud of Pure Thought" },
+      { itemId: 18208, itemName: "Drape of Benediction" },
+      { itemId: 19870, itemName: "Hakkari Loa Cloak" },
+      { itemId: 18389, itemName: "Cloak of the Cosmos" },
+      { itemId: 19526, itemName: "Battle Healer's Cloak" },
+      { itemId: 19530, itemName: "Caretaker's Cape" },
+      { itemId: 22330, itemName: "Shroud of Arcane Mastery" }
+    ],
+    16: [
+      { itemId: 23056, itemName: "Hammer of the Twisting Nether" },
+      { itemId: 21839, itemName: "Scepter of the False Prophet" },
+      { itemId: 22942, itemName: "The Widow's Embrace" },
+      { itemId: 23464, itemName: "High Warlord's Battle Mace" },
+      { itemId: 23454, itemName: "Grand Marshal's Warhammer" },
+      { itemId: 21523, itemName: "Fang of Korialstrasz" },
+      { itemId: 19360, itemName: "Lok'amir il Romathis" },
+      { itemId: 19347, itemName: "Claw of Chromaggus" },
+      { itemId: 19890, itemName: "Jin'do's Hexxer" },
+      { itemId: 17105, itemName: "Aurastone Hammer" },
+      { itemId: 11923, itemName: "The Hammer of Grace" },
+      { itemId: 22632, itemName: "Atiesh, Greatstaff of the Guardian" },
+      { itemId: 22801, itemName: "Spire of Twilight" },
+      { itemId: 21275, itemName: "Blessed Qiraji Augur Staff" },
+      { itemId: 20581, itemName: "Staff of Rampant Growth" },
+      { itemId: 19909, itemName: "Will of Arlokk" },
+      { itemId: 22406, itemName: "Redemption" },
+      { itemId: 11932, itemName: "Guiding Stave of Wisdom" },
+      { itemId: 22394, itemName: "Staff of Metanoia" }
+    ],
+    17: [
+      { itemId: 23048, itemName: "Sapphiron's Right Eye" },
+      { itemId: 23029, itemName: "Noth's Frigid Heart" },
+      { itemId: 21666, itemName: "Sartura's Might" },
+      { itemId: 19312, itemName: "Lei of the Lifegiver" },
+      { itemId: 23453, itemName: "Grand Marshal's Tome of Restoration" },
+      { itemId: 22319, itemName: "Tome of Divine Right" },
+      { itemId: 18523, itemName: "Brightly Glowing Stone" },
+      { itemId: 22329, itemName: "Scepter of Interminable Focus" }
+    ],
+    18: [
+      { itemId: 22399, itemName: "Idol of Health" },
+      { itemId: 22398, itemName: "Idol of Rejuvenation" },
+      { itemId: 23004, itemName: "Idol of Longevity" }
+    ]
   },
   "hunter-dps-p6": {
     1: [22438],
