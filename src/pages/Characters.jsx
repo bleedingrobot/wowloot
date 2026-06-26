@@ -10,6 +10,7 @@ import {
   SPEC_OPTIONS_BY_CLASS
 } from "../data/bisLists";
 import { BIS_ITEM_NAME_BY_ID } from "../data/bisItemNames";
+import warriorSimTemplate from "../data/warriorSimTemplate.json";
 
 const EQUIPMENT_LEFT_SLOTS = [1, 2, 3, 5, 9, 10, 6, 7, 8];
 const EQUIPMENT_RIGHT_SLOTS = [11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -37,6 +38,18 @@ const SLOT_LABELS = {
 
 const DEFAULT_SPEC_BY_CLASS = {
   Paladin: "paladin-holy-p6"
+};
+
+const WARRIOR_SIM_EQUIPMENT_ORDER = [1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18];
+const WARRIOR_SIM_RACE_BY_CHARACTER_RACE = {
+  Human: "RaceHuman",
+  Orc: "RaceOrc",
+  Dwarf: "RaceDwarf",
+  "Night Elf": "RaceNightElf",
+  Undead: "RaceUndead",
+  Tauren: "RaceTauren",
+  Gnome: "RaceGnome",
+  Troll: "RaceTroll"
 };
 
 const ITEM_ID_PLACEHOLDER_PATTERN = /^item\s*#\d+$/i;
@@ -207,6 +220,46 @@ function buildWowheadItemUrl(itemId) {
   return `https://www.wowhead.com/classic/item=${id}`;
 }
 
+function buildWarriorSimExport(character, equippedBySlot) {
+  const next = JSON.parse(JSON.stringify(warriorSimTemplate));
+  const templateItems = Array.isArray(next?.player?.equipment?.items)
+    ? next.player.equipment.items
+    : [];
+
+  const missingSlots = [];
+  const items = WARRIOR_SIM_EQUIPMENT_ORDER.map((slot, index) => {
+    const equipped = equippedBySlot.get(slot);
+    const equippedId = Number(equipped?.itemId || 0);
+
+    if (Number.isFinite(equippedId) && equippedId > 0) {
+      return { id: equippedId };
+    }
+
+    missingSlots.push(slot);
+    const fallbackId = Number(templateItems[index]?.id || 0);
+    return fallbackId > 0 ? { id: fallbackId } : { id: 0 };
+  });
+
+  if (!next.player || !next.player.equipment) {
+    throw new Error("Warrior simulator template is missing equipment data.");
+  }
+
+  next.player.equipment.items = items;
+  if (character?.name) {
+    next.player.name = String(character.name);
+  }
+
+  const mappedRace = WARRIOR_SIM_RACE_BY_CHARACTER_RACE[String(character?.race || "").trim()];
+  if (mappedRace) {
+    next.player.race = mappedRace;
+  }
+
+  return {
+    jsonText: JSON.stringify(next, null, 2),
+    missingSlots
+  };
+}
+
 function CharactersPage() {
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
@@ -219,6 +272,7 @@ function CharactersPage() {
   const [selectedSpecKey, setSelectedSpecKey] = useState("");
   const [isResolvingItemNames, setIsResolvingItemNames] = useState(false);
   const [resolveItemNamesMessage, setResolveItemNamesMessage] = useState("");
+  const [warriorExportMessage, setWarriorExportMessage] = useState("");
 
   const classOptions = useMemo(
     () => Array.from(new Set(data.characters.map((character) => character.class).filter(Boolean))).sort(),
@@ -285,6 +339,8 @@ function CharactersPage() {
     });
     return map;
   }, [selectedCharacter]);
+
+  const isSelectedCharacterWarrior = normalize(selectedCharacter?.class) === "warrior";
 
   const selectedSpecOptions = useMemo(() => {
     if (!selectedCharacter?.class) {
@@ -514,6 +570,40 @@ function CharactersPage() {
     }
   };
 
+  const onCopyWarriorSimExport = async () => {
+    if (!selectedCharacter || !isSelectedCharacterWarrior) {
+      return;
+    }
+
+    if (!navigator?.clipboard?.writeText) {
+      setWarriorExportMessage("Clipboard access is unavailable in this browser context.");
+      return;
+    }
+
+    try {
+      const { jsonText, missingSlots } = buildWarriorSimExport(selectedCharacter, selectedEquipmentBySlot);
+      await navigator.clipboard.writeText(jsonText);
+
+      if (missingSlots.length) {
+        const missingSlotLabels = missingSlots
+          .map((slot) => SLOT_LABELS[slot] || `Slot ${slot}`)
+          .join(", ");
+        setWarriorExportMessage(
+          `Copied Warrior sim JSON. Missing worn items for: ${missingSlotLabels}. Used template fallback IDs for those slots.`
+        );
+        return;
+      }
+
+      setWarriorExportMessage("Copied Warrior sim JSON with your currently equipped item IDs.");
+    } catch {
+      setWarriorExportMessage("Failed to generate or copy Warrior sim JSON. Please try again.");
+    }
+  };
+
+  useEffect(() => {
+    setWarriorExportMessage("");
+  }, [selectedCharacterId]);
+
   if (!user) {
     return <p className="empty-panel">Sign in to view character armory details.</p>;
   }
@@ -641,9 +731,20 @@ function CharactersPage() {
                 >
                   {isResolvingItemNames ? "Fetching item names..." : "Fetch missing item names"}
                 </button>
+                {isSelectedCharacterWarrior ? (
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={onCopyWarriorSimExport}
+                    disabled={!selectedCharacter}
+                  >
+                    Copy Warrior Sim JSON
+                  </button>
+                ) : null}
               </div>
 
               {resolveItemNamesMessage ? <p className="subtitle">{resolveItemNamesMessage}</p> : null}
+              {warriorExportMessage ? <p className="subtitle">{warriorExportMessage}</p> : null}
 
               {showBisUpgrades ? (
                 selectedBisBySlot ? (
