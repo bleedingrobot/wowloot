@@ -20,7 +20,8 @@
     { key: "priest-holy-p6", label: "Holy (Phase 6)" }
   ],
   Rogue: [
-    { key: "rogue-dps-p6", label: "DPS (Phase 6)" }
+    { key: "rogue-swords-p6", label: "Combat Swords (Phase 6)" },
+    { key: "rogue-daggers-p6", label: "Combat Daggers (Phase 6)" }
   ],
   Shaman: [
     { key: "shaman-elemental-p6", label: "Elemental (Phase 6)" },
@@ -46,7 +47,8 @@ export const BIS_GUIDE_URL_BY_SPEC = {
   "paladin-holy-p6": "https://www.wowhead.com/classic/guide/wow-classic-paladin-healing-naxxramas-best-in-slot-gear",
   "priest-shadow-p6": "https://www.wowhead.com/classic/guide/wow-classic-shadow-priest-dps-naxxramas-best-in-slot-gear",
   "priest-holy-p6": "https://www.wowhead.com/classic/guide/wow-classic-priest-healing-naxxramas-best-in-slot-gear",
-  "rogue-dps-p6": "https://www.wowhead.com/classic/guide/wow-classic-rogue-dps-naxxramas-best-in-slot-gear",
+  "rogue-swords-p6": "https://www.wowhead.com/classic/guide/wow-classic-rogue-dps-naxxramas-best-in-slot-gear",
+  "rogue-daggers-p6": "https://www.wowhead.com/classic/guide/wow-classic-rogue-dps-naxxramas-best-in-slot-gear",
   "shaman-elemental-p6": "https://www.wowhead.com/classic/guide/wow-classic-elemental-shaman-dps-naxxramas-best-in-slot-gear",
   "shaman-enhancement-p6": "https://www.wowhead.com/classic/guide/wow-classic-enhancement-shaman-dps-naxxramas-best-in-slot-gear",
   "shaman-resto-p6": "https://www.wowhead.com/classic/guide/wow-classic-shaman-healing-naxxramas-best-in-slot-gear",
@@ -852,23 +854,110 @@ export const BIS_ITEM_IDS_BY_SPEC = {
     17: [23048, 23029, 21666, 19312],
     18: [23009, 15283, 15282, 21801, 22254]
   },
-  "rogue-dps-p6": {
+  "rogue-swords-p6": {
     1: [22478],
     2: [19377],
     3: [22479],
     5: [21364],
-    6: [22482],
+    6: [
+      { itemId: 22482, itemName: "Bonescythe Waistguard" },
+      { itemId: 16910, itemName: "Bloodfang Belt" },
+      { itemId: 16827, itemName: "Nightslayer Belt" }
+    ],
     7: [22477],
     8: [22480],
-    9: [22483],
-    10: [22481],
+    9: [
+      { itemId: 22483, itemName: "Bonescythe Bracers" },
+      { itemId: 16911, itemName: "Bloodfang Bracers" },
+      { itemId: 22004, itemName: "Darkmantle Bracers" }
+    ],
+    10: [
+      { itemId: 22481, itemName: "Bonescythe Gauntlets" },
+      { itemId: 21672, itemName: "Gloves of Enforcement" },
+      { itemId: 18823, itemName: "Aged Core Leather Gloves" }
+    ],
     11: [23060, 23038, 17063, 22961, 21205],
     12: [23060, 23038, 17063, 22961, 21205],
     13: [22954, 23041, 23206, 23570, 21180],
     14: [22954, 23041, 23206, 23570, 21180],
-    15: [21710],
-    16: [23054, 12584, 21650, 19352, 20577],
-    17: [23014, 23577, 19351, 19019, 22806],
+    15: [
+      { itemId: 21710, itemName: "Cloak of the Fallen God" },
+      { itemId: 23045, itemName: "Shroud of Dominion" },
+      { itemId: 21406, itemName: "Cloak of Veiled Shadows" },
+      { itemId: 18541, itemName: "Puissant Cape" }
+    ],
+    16: [
+      { itemId: 23054, itemName: "Gressil, Dawn of Ruin" },
+      { itemId: 12584, itemName: "Grand Marshal's Longsword" },
+      { itemId: 16345, itemName: "High Warlord's Blade" },
+      { itemId: 19352, itemName: "Chromatically Tempered Sword" },
+      { itemId: 20577, itemName: "Nightmare Blade" },
+      { itemId: 18832, itemName: "Brutality Blade" }
+    ],
+    17: [
+      { itemId: 23014, itemName: "Iblis, Blade of the Fallen Seraph" },
+      { itemId: 23577, itemName: "The Hungering Cold" },
+      { itemId: 19351, itemName: "Maladath, Runed Blade of the Black Flight" },
+      { itemId: 19019, itemName: "Thunderfury, Blessed Blade of the Windseeker" },
+      { itemId: 22806, itemName: "Widow's Remorse" },
+      { itemId: 23456, itemName: "Grand Marshal's Swiftblade" },
+      { itemId: 23467, itemName: "High Warlord's Quickblade" }
+    ],
+    18: [22812, 21616, 22811, 21459, 17069]
+  },
+  "rogue-daggers-p6": {
+    1: [22478],
+    2: [19377],
+    3: [22479],
+    5: [21364],
+    6: [
+      { itemId: 21586, itemName: "Belt of Never-Ending Agony" },
+      { itemId: 22482, itemName: "Bonescythe Waistguard" },
+      { itemId: 16910, itemName: "Bloodfang Belt" },
+      { itemId: 16827, itemName: "Nightslayer Belt" },
+      { itemId: 20216, itemName: "Belt of Preserved Heads" }
+    ],
+    7: [22477],
+    8: [22480],
+    9: [
+      { itemId: 21602, itemName: "Qiraji Execution Bracers" },
+      { itemId: 22483, itemName: "Bonescythe Bracers" },
+      { itemId: 16911, itemName: "Bloodfang Bracers" },
+      { itemId: 22004, itemName: "Darkmantle Bracers" }
+    ],
+    10: [
+      { itemId: 18823, itemName: "Aged Core Leather Gloves" },
+      { itemId: 22481, itemName: "Bonescythe Gauntlets" },
+      { itemId: 21672, itemName: "Gloves of Enforcement" },
+      { itemId: 22006, itemName: "Darkmantle Gloves" }
+    ],
+    11: [23060, 23038, 17063, 22961, 21205],
+    12: [23060, 23038, 17063, 22961, 21205],
+    13: [22954, 23041, 23206, 23570, 21180],
+    14: [22954, 23041, 23206, 23570, 21180],
+    15: [
+      { itemId: 21701, itemName: "Cloak of Concentrated Hatred" },
+      { itemId: 21406, itemName: "Cloak of Veiled Shadows" },
+      { itemId: 18541, itemName: "Puissant Cape" }
+    ],
+    16: [
+      { itemId: 21126, itemName: "Death's Sting" },
+      { itemId: 22804, itemName: "Maexxna's Fang" },
+      { itemId: 23044, itemName: "Harbinger of Doom" },
+      { itemId: 21244, itemName: "Blessed Qiraji Pugio" },
+      { itemId: 21650, itemName: "Ancient Qiraji Ripper" },
+      { itemId: 18838, itemName: "Grand Marshal's Dirk" },
+      { itemId: 18840, itemName: "High Warlord's Razor" }
+    ],
+    17: [
+      { itemId: 23014, itemName: "Iblis, Blade of the Fallen Seraph" },
+      { itemId: 23577, itemName: "The Hungering Cold" },
+      { itemId: 19351, itemName: "Maladath, Runed Blade of the Black Flight" },
+      { itemId: 19019, itemName: "Thunderfury, Blessed Blade of the Windseeker" },
+      { itemId: 22806, itemName: "Widow's Remorse" },
+      { itemId: 23456, itemName: "Grand Marshal's Swiftblade" },
+      { itemId: 23467, itemName: "High Warlord's Quickblade" }
+    ],
     18: [22812, 21616, 22811, 21459, 17069]
   },
   "shaman-elemental-p6": {
