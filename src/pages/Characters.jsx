@@ -137,27 +137,26 @@ async function fetchWowheadItemName(itemId) {
     return fetchedItemNameCache.get(id) || "";
   }
 
-  const urls = [
-    `https://www.wowhead.com/classic/item=${id}&xml`,
-    `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://www.wowhead.com/classic/item=${id}&xml`)}`
-  ];
-
-  for (const url of urls) {
-    try {
-      const response = await fetch(url);
-      if (!response.ok) {
-        continue;
-      }
-
-      const text = await response.text();
-      const name = extractNameFromWowheadXml(text);
-      if (name) {
-        fetchedItemNameCache.set(id, name);
-        return name;
-      }
-    } catch {
-      // Try the next source.
+  try {
+    const response = await fetch(`https://nether.wowhead.com/classic/tooltip/item/${id}`);
+    if (!response.ok) {
+      return "";
     }
+
+    const data = await response.json();
+    const name = String(data?.name || "").trim();
+    if (name) {
+      fetchedItemNameCache.set(id, name);
+      return name;
+    }
+
+    const tooltipName = extractNameFromWowheadXml(String(data?.tooltip || ""));
+    if (tooltipName) {
+      fetchedItemNameCache.set(id, tooltipName);
+      return tooltipName;
+    }
+  } catch {
+    return "";
   }
 
   return "";
