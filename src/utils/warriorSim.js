@@ -73,6 +73,28 @@ function extractEnchantIdFromItemLink(itemLink) {
   return normalizeEnchantId(match[1]);
 }
 
+function buildSimItem(equipped, fallback) {
+  const itemId = Number(equipped?.itemId || fallback?.id || 0);
+  if (!Number.isFinite(itemId) || itemId <= 0) {
+    return { id: 0 };
+  }
+
+  const simItem = { id: itemId };
+  const enchantId = normalizeEnchantId(equipped?.enchantId)
+    || extractEnchantIdFromItemLink(equipped?.itemLink)
+    || normalizeEnchantId(fallback?.enchant);
+  if (enchantId > 0) {
+    simItem.enchant = enchantId;
+  }
+
+  const randomSuffixId = Number(equipped?.randomSuffixId || fallback?.randomSuffix || 0);
+  if (Number.isFinite(randomSuffixId) && randomSuffixId !== 0) {
+    simItem.randomSuffix = randomSuffixId;
+  }
+
+  return simItem;
+}
+
 export function buildWarriorSimExport(character, equippedBySlot) {
   const next = JSON.parse(JSON.stringify(warriorSimTemplate));
   const templateItems = Array.isArray(next?.player?.equipment?.items)
@@ -83,18 +105,15 @@ export function buildWarriorSimExport(character, equippedBySlot) {
   const items = WARRIOR_SIM_EQUIPMENT_ORDER.map((slot, index) => {
     const equipped = equippedBySlot.get(slot);
     const equippedId = Number(equipped?.itemId || 0);
-    const equippedEnchantId = normalizeEnchantId(equipped?.enchantId)
-      || extractEnchantIdFromItemLink(equipped?.itemLink);
 
     if (Number.isFinite(equippedId) && equippedId > 0) {
-      return equippedEnchantId > 0 ? { id: equippedId, enchant: equippedEnchantId } : { id: equippedId };
+      return buildSimItem(equipped, templateItems[index]);
     }
 
     missingSlots.push(slot);
-    const fallbackId = Number(templateItems[index]?.id || 0);
-    const fallbackEnchantId = normalizeEnchantId(templateItems[index]?.enchant);
-    if (fallbackId > 0) {
-      return fallbackEnchantId > 0 ? { id: fallbackId, enchant: fallbackEnchantId } : { id: fallbackId };
+    const fallbackItem = buildSimItem(null, templateItems[index]);
+    if (Number(fallbackItem.id) > 0) {
+      return fallbackItem;
     }
 
     return { id: 0 };

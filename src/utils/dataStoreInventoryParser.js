@@ -74,15 +74,17 @@ function parseLuaValue(raw) {
 
 function parseItemLink(link) {
   const text = String(link || "");
-  const linkMatch = text.match(/\|Hitem:(\d+):(-?\d*):[\s\S]*?\|h\[([\s\S]*?)\]\|h/);
+  const linkMatch = text.match(/\|Hitem:(\d+):(-?\d*):(-?\d*):(-?\d*):(-?\d*):(-?\d*):(-?\d*):[\s\S]*?\|h\[([\s\S]*?)\]\|h/);
   if (linkMatch) {
     const colorMatch = text.match(/^\|cff([0-9a-fA-F]{6})\|Hitem:/);
     const color = colorMatch ? colorMatch[1].toLowerCase() : "ffffff";
+    const randomSuffixId = Number(linkMatch[7]);
 
     return {
       itemId: Number(linkMatch[1]),
       enchantId: Number.isFinite(Number(linkMatch[2])) ? Number(linkMatch[2]) : 0,
-      itemName: String(linkMatch[3] || "").trim(),
+      randomSuffixId: Number.isFinite(randomSuffixId) && randomSuffixId !== 0 ? randomSuffixId : 0,
+      itemName: String(linkMatch[8] || "").trim(),
       qualityColor: color,
       quality: QUALITY_BY_COLOR[color] || "common",
       itemLink: text
@@ -90,7 +92,7 @@ function parseItemLink(link) {
   }
 
   // DataStore variants can emit plain item strings like item:12345:1900:...
-  const rawMatch = text.match(/(?:^|\b)item:(\d+):(-?\d*)/i);
+  const rawMatch = text.match(/(?:^|\b)item:(\d+):(-?\d*)(?::(-?\d*))?(?::(-?\d*))?(?::(-?\d*))?(?::(-?\d*))?(?::(-?\d*))?/i);
   if (!rawMatch) {
     return null;
   }
@@ -101,10 +103,12 @@ function parseItemLink(link) {
   }
 
   const enchantId = Number(rawMatch[2]);
+  const randomSuffixId = Number(rawMatch[7]);
 
   return {
     itemId,
     enchantId: Number.isFinite(enchantId) && enchantId > 0 ? enchantId : 0,
+    randomSuffixId: Number.isFinite(randomSuffixId) && randomSuffixId !== 0 ? randomSuffixId : 0,
     itemName: "",
     qualityColor: "ffffff",
     quality: "common",
@@ -173,6 +177,7 @@ export function parseDataStoreInventory(luaText, fileName = "", accountHintName 
         slotName: SLOT_LABELS[item.slot] || `Slot ${item.slot}`,
         itemId: item.itemId,
         enchantId: Number.isFinite(Number(item.enchantId)) ? Number(item.enchantId) : 0,
+        randomSuffixId: Number.isFinite(Number(item.randomSuffixId)) ? Number(item.randomSuffixId) : 0,
         itemName: item.itemName || `Item #${item.itemId}`,
         itemLink: item.itemLink,
         quality: item.quality,

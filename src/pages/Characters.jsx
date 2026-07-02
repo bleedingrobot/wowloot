@@ -26,6 +26,10 @@ import {
   buildRogueSimExport,
   ROGUE_SIM_PAYLOAD_KEY
 } from "../utils/rogueSim";
+import {
+  buildMageSimExport,
+  MAGE_SIM_PAYLOAD_KEY
+} from "../utils/mageSim";
 
 const EQUIPMENT_LEFT_SLOTS = [1, 2, 3, 5, 9, 10, 6, 7, 8];
 const EQUIPMENT_RIGHT_SLOTS = [11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -285,6 +289,7 @@ function CharactersPage() {
 
   const isSelectedCharacterWarrior = normalize(selectedCharacter?.class) === "warrior";
   const isSelectedCharacterRogue = normalize(selectedCharacter?.class) === "rogue";
+  const isSelectedCharacterMage = normalize(selectedCharacter?.class) === "mage";
 
   const selectedClassicSimConfig = useMemo(() => {
     if (isSelectedCharacterWarrior) {
@@ -305,8 +310,17 @@ function CharactersPage() {
       };
     }
 
+    if (isSelectedCharacterMage) {
+      return {
+        label: "Classic Mage",
+        buildExport: buildMageSimExport,
+        payloadKey: MAGE_SIM_PAYLOAD_KEY,
+        route: "/sim/mage"
+      };
+    }
+
     return null;
-  }, [isSelectedCharacterRogue, isSelectedCharacterWarrior]);
+  }, [isSelectedCharacterMage, isSelectedCharacterRogue, isSelectedCharacterWarrior]);
 
   const selectedSpecOptions = useMemo(() => {
     if (!selectedCharacter?.class) {

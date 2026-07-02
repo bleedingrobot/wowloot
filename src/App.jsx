@@ -12,6 +12,7 @@ import SettingsPage from "./pages/Settings";
 import AdminPage from "./pages/Admin";
 import WarriorSimPage from "./pages/WarriorSim";
 import RogueSimPage from "./pages/RogueSim";
+import MageSimPage from "./pages/MageSim";
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
         <Route path="/admin" element={<AdminPage />} />
         <Route path="/sim/warrior" element={<WarriorSimPage />} />
         <Route path="/sim/rogue" element={<RogueSimPage />} />
+        <Route path="/sim/mage" element={<MageSimPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
