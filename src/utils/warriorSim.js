@@ -1,0 +1,98 @@
+import warriorSimTemplate from "../data/warriorSimTemplate.json";
+
+export const SLOT_LABELS = {
+  1: "Head",
+  2: "Neck",
+  3: "Shoulder",
+  4: "Shirt",
+  5: "Chest",
+  6: "Waist",
+  7: "Legs",
+  8: "Feet",
+  9: "Wrist",
+  10: "Hands",
+  11: "Finger 1",
+  12: "Finger 2",
+  13: "Trinket 1",
+  14: "Trinket 2",
+  15: "Back",
+  16: "Main Hand",
+  17: "Off Hand",
+  18: "Ranged",
+  19: "Tabard"
+};
+
+export const WARRIOR_SIM_PAYLOAD_KEY = "wowloot-warrior-sim-payload";
+
+export function getWarriorSimUrl() {
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+    return "/wowsims/classic/warrior/";
+  }
+  return "https://wowsims.github.io/classic/warrior/";
+}
+
+const WARRIOR_SIM_EQUIPMENT_ORDER = [1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18];
+const WARRIOR_SIM_RACE_BY_CHARACTER_RACE = {
+  Human: "RaceHuman",
+  Orc: "RaceOrc",
+  Dwarf: "RaceDwarf",
+  "Night Elf": "RaceNightElf",
+  Undead: "RaceUndead",
+  Tauren: "RaceTauren",
+  Gnome: "RaceGnome",
+  Troll: "RaceTroll"
+};
+
+export function normalizeEnchantId(value) {
+  const enchantId = Number(value);
+  if (!Number.isFinite(enchantId) || enchantId <= 0) {
+    return 0;
+  }
+  return enchantId;
+}
+
+export function buildWarriorSimExport(character, equippedBySlot) {
+  const next = JSON.parse(JSON.stringify(warriorSimTemplate));
+  const templateItems = Array.isArray(next?.player?.equipment?.items)
+    ? next.player.equipment.items
+    : [];
+
+  const missingSlots = [];
+  const items = WARRIOR_SIM_EQUIPMENT_ORDER.map((slot, index) => {
+    const equipped = equippedBySlot.get(slot);
+    const equippedId = Number(equipped?.itemId || 0);
+    const equippedEnchantId = normalizeEnchantId(equipped?.enchantId);
+
+    if (Number.isFinite(equippedId) && equippedId > 0) {
+      return equippedEnchantId > 0 ? { id: equippedId, enchant: equippedEnchantId } : { id: equippedId };
+    }
+
+    missingSlots.push(slot);
+    const fallbackId = Number(templateItems[index]?.id || 0);
+    const fallbackEnchantId = normalizeEnchantId(templateItems[index]?.enchant);
+    if (fallbackId > 0) {
+      return fallbackEnchantId > 0 ? { id: fallbackId, enchant: fallbackEnchantId } : { id: fallbackId };
+    }
+
+    return { id: 0 };
+  });
+
+  if (!next.player || !next.player.equipment) {
+    throw new Error("Warrior simulator template is missing equipment data.");
+  }
+
+  next.player.equipment.items = items;
+  if (character?.name) {
+    next.player.name = String(character.name);
+  }
+
+  const mappedRace = WARRIOR_SIM_RACE_BY_CHARACTER_RACE[String(character?.race || "").trim()];
+  if (mappedRace) {
+    next.player.race = mappedRace;
+  }
+
+  return {
+    jsonText: JSON.stringify(next, null, 2),
+    missingSlots
+  };
+}

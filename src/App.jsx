@@ -10,6 +10,7 @@ import RaidsPage from "./pages/Raids";
 import RestedXpPage from "./pages/RestedXp";
 import SettingsPage from "./pages/Settings";
 import AdminPage from "./pages/Admin";
+import WarriorSimPage from "./pages/WarriorSim";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         <Route path="/buff-profiles" element={<BuffProfilesPage />} />
         <Route path="/rested" element={<RestedXpPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/sim/warrior" element={<WarriorSimPage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

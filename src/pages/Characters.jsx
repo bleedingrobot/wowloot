@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useUserCollections } from "../hooks/useUserCollections";
 import { updateCharacter } from "../services/dataService";
@@ -10,46 +11,22 @@ import {
   SPEC_OPTIONS_BY_CLASS
 } from "../data/bisLists";
 import { BIS_ITEM_NAME_BY_ID } from "../data/bisItemNames";
-import warriorSimTemplate from "../data/warriorSimTemplate.json";
+import {
+  getEnchantLabel,
+  getMissingEnchantIdsFromCharacters,
+  isKnownEnchantId
+} from "../data/enchantNames";
+import {
+  SLOT_LABELS,
+  buildWarriorSimExport,
+  normalizeEnchantId,
+  WARRIOR_SIM_PAYLOAD_KEY
+} from "../utils/warriorSim";
 
 const EQUIPMENT_LEFT_SLOTS = [1, 2, 3, 5, 9, 10, 6, 7, 8];
 const EQUIPMENT_RIGHT_SLOTS = [11, 12, 13, 14, 15, 16, 17, 18, 19];
-const SLOT_LABELS = {
-  1: "Head",
-  2: "Neck",
-  3: "Shoulder",
-  4: "Shirt",
-  5: "Chest",
-  6: "Waist",
-  7: "Legs",
-  8: "Feet",
-  9: "Wrist",
-  10: "Hands",
-  11: "Finger 1",
-  12: "Finger 2",
-  13: "Trinket 1",
-  14: "Trinket 2",
-  15: "Back",
-  16: "Main Hand",
-  17: "Off Hand",
-  18: "Ranged",
-  19: "Tabard"
-};
-
 const DEFAULT_SPEC_BY_CLASS = {
   Paladin: "paladin-holy-p6"
-};
-
-const WARRIOR_SIM_EQUIPMENT_ORDER = [1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18];
-const WARRIOR_SIM_RACE_BY_CHARACTER_RACE = {
-  Human: "RaceHuman",
-  Orc: "RaceOrc",
-  Dwarf: "RaceDwarf",
-  "Night Elf": "RaceNightElf",
-  Undead: "RaceUndead",
-  Tauren: "RaceTauren",
-  Gnome: "RaceGnome",
-  Troll: "RaceTroll"
 };
 
 const ITEM_ID_PLACEHOLDER_PATTERN = /^item\s*#\d+$/i;
@@ -220,47 +197,8 @@ function buildWowheadItemUrl(itemId) {
   return `https://www.wowhead.com/classic/item=${id}`;
 }
 
-function buildWarriorSimExport(character, equippedBySlot) {
-  const next = JSON.parse(JSON.stringify(warriorSimTemplate));
-  const templateItems = Array.isArray(next?.player?.equipment?.items)
-    ? next.player.equipment.items
-    : [];
-
-  const missingSlots = [];
-  const items = WARRIOR_SIM_EQUIPMENT_ORDER.map((slot, index) => {
-    const equipped = equippedBySlot.get(slot);
-    const equippedId = Number(equipped?.itemId || 0);
-
-    if (Number.isFinite(equippedId) && equippedId > 0) {
-      return { id: equippedId };
-    }
-
-    missingSlots.push(slot);
-    const fallbackId = Number(templateItems[index]?.id || 0);
-    return fallbackId > 0 ? { id: fallbackId } : { id: 0 };
-  });
-
-  if (!next.player || !next.player.equipment) {
-    throw new Error("Warrior simulator template is missing equipment data.");
-  }
-
-  next.player.equipment.items = items;
-  if (character?.name) {
-    next.player.name = String(character.name);
-  }
-
-  const mappedRace = WARRIOR_SIM_RACE_BY_CHARACTER_RACE[String(character?.race || "").trim()];
-  if (mappedRace) {
-    next.player.race = mappedRace;
-  }
-
-  return {
-    jsonText: JSON.stringify(next, null, 2),
-    missingSlots
-  };
-}
-
 function CharactersPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data } = useUserCollections(user?.uid);
   const [searchTerm, setSearchTerm] = useState("");
@@ -273,6 +211,7 @@ function CharactersPage() {
   const [isResolvingItemNames, setIsResolvingItemNames] = useState(false);
   const [resolveItemNamesMessage, setResolveItemNamesMessage] = useState("");
   const [warriorExportMessage, setWarriorExportMessage] = useState("");
+  const [enchantAuditMessage, setEnchantAuditMessage] = useState("");
 
   const classOptions = useMemo(
     () => Array.from(new Set(data.characters.map((character) => character.class).filter(Boolean))).sort(),
@@ -451,6 +390,31 @@ function CharactersPage() {
       .sort((a, b) => a.localeCompare(b));
   }, [selectedCharacter]);
 
+  const missingEnchantIds = useMemo(
+    () => getMissingEnchantIdsFromCharacters(data.characters),
+    [data.characters]
+  );
+
+  const onCopyMissingEnchantIds = async () => {
+    if (!missingEnchantIds.length) {
+      setEnchantAuditMessage("Enchant coverage is complete for current equipped data.");
+      return;
+    }
+
+    const text = missingEnchantIds.join(", ");
+    if (!navigator?.clipboard?.writeText) {
+      setEnchantAuditMessage(`Missing enchant IDs: ${text}`);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setEnchantAuditMessage(`Copied ${missingEnchantIds.length} missing enchant ID(s): ${text}`);
+    } catch {
+      setEnchantAuditMessage(`Missing enchant IDs: ${text}`);
+    }
+  };
+
   const renderSlot = (slotId) => {
     const item = selectedEquipmentBySlot.get(slotId);
     const slotLabel = SLOT_LABELS[slotId] || `Slot ${slotId}`;
@@ -476,6 +440,17 @@ function CharactersPage() {
           >
             {getItemName(item)}
           </a>
+          {normalizeEnchantId(item.enchantId) > 0 ? (
+            <span
+              className={`subtitle ${isKnownEnchantId(item.enchantId) ? "" : "sync-warning"}`}
+              title={isKnownEnchantId(item.enchantId)
+                ? getEnchantLabel(item.enchantId)
+                : `${getEnchantLabel(item.enchantId)} - add this ID to src/data/enchantNames.js`}
+              aria-label={`Enchant ${getEnchantLabel(item.enchantId)}`}
+            >
+              {` [${getEnchantLabel(item.enchantId)}${isKnownEnchantId(item.enchantId) ? "" : " (missing name)"}]`}
+            </span>
+          ) : null}
         </span>
       </li>
     );
@@ -597,6 +572,52 @@ function CharactersPage() {
       setWarriorExportMessage("Copied Warrior sim JSON with your currently equipped item IDs.");
     } catch {
       setWarriorExportMessage("Failed to generate or copy Warrior sim JSON. Please try again.");
+    }
+  };
+
+  const onLaunchIntegratedWarriorSim = async () => {
+    if (!selectedCharacter || !isSelectedCharacterWarrior) {
+      return;
+    }
+
+    try {
+      const { jsonText, missingSlots } = buildWarriorSimExport(selectedCharacter, selectedEquipmentBySlot);
+
+      try {
+        localStorage.setItem(WARRIOR_SIM_PAYLOAD_KEY, jsonText);
+      } catch {
+        // Continue even if local storage is unavailable.
+      }
+
+      if (navigator?.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(jsonText);
+        } catch {
+          // Continue with navigation even if clipboard is blocked.
+        }
+      }
+
+      navigate("/sim/warrior", {
+        state: {
+          simJsonText: jsonText,
+          missingSlots,
+          characterName: selectedCharacter.name || ""
+        }
+      });
+
+      if (missingSlots.length) {
+        const missingSlotLabels = missingSlots
+          .map((slot) => SLOT_LABELS[slot] || `Slot ${slot}`)
+          .join(", ");
+        setWarriorExportMessage(
+          `Opened integrated sim. Missing worn items for: ${missingSlotLabels}. Template fallback IDs were used.`
+        );
+        return;
+      }
+
+      setWarriorExportMessage("Opened integrated sim with your currently equipped item IDs.");
+    } catch {
+      setWarriorExportMessage("Failed to prepare Warrior payload. Please try again.");
     }
   };
 
@@ -732,19 +753,46 @@ function CharactersPage() {
                   {isResolvingItemNames ? "Fetching item names..." : "Fetch missing item names"}
                 </button>
                 {isSelectedCharacterWarrior ? (
-                  <button
-                    type="button"
-                    className="secondary-btn"
-                    onClick={onCopyWarriorSimExport}
-                    disabled={!selectedCharacter}
-                  >
-                    Copy Warrior Sim JSON
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={onLaunchIntegratedWarriorSim}
+                      disabled={!selectedCharacter}
+                    >
+                      Open Integrated Warrior Sim (Auto-Load)
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={onCopyWarriorSimExport}
+                      disabled={!selectedCharacter}
+                    >
+                      Copy Warrior Sim JSON
+                    </button>
+                  </>
                 ) : null}
+              </div>
+
+              <div className="row-actions">
+                <span className="subtitle">
+                  Enchant coverage: {missingEnchantIds.length ? `${missingEnchantIds.length} missing ID(s)` : "Complete"}
+                </span>
+                <button
+                  type="button"
+                  className="secondary-btn"
+                  onClick={onCopyMissingEnchantIds}
+                >
+                  {missingEnchantIds.length ? "Copy Missing Enchant IDs" : "Enchant Coverage OK"}
+                </button>
               </div>
 
               {resolveItemNamesMessage ? <p className="subtitle">{resolveItemNamesMessage}</p> : null}
               {warriorExportMessage ? <p className="subtitle">{warriorExportMessage}</p> : null}
+              {enchantAuditMessage ? <p className="subtitle">{enchantAuditMessage}</p> : null}
+              {missingEnchantIds.length ? (
+                <p className="subtitle">Missing enchant IDs in current data: {missingEnchantIds.join(", ")}</p>
+              ) : null}
 
               {showBisUpgrades ? (
                 selectedBisBySlot ? (

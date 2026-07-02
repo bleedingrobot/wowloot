@@ -35,6 +35,11 @@ import {
   mergeInventoryProfiles
 } from "../utils/dataStoreProfileHelpers";
 import {
+  formatImportWarnings,
+  validateDataStoreSourceHealth,
+  validateNovaSourceHealth
+} from "../utils/importHealthChecks";
+import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
   mergeConnectedHandles as mergeBagnonConnectedHandles,
@@ -322,6 +327,7 @@ function SettingsPage() {
       const parsed = [];
       const activeRaids = [];
       const parsedWorldBuffStates = [];
+      const sourceWarnings = [];
 
       for (const source of sources) {
         const sourceAccount = (source.accountHintName || "").trim();
@@ -355,8 +361,20 @@ function SettingsPage() {
           restedXp: null,
           accountId: sourceAccountId
         })));
-        parsed.push(...parseNovaSavedInstances(source.text));
-        activeRaids.push(...parseNovaActiveInstances(source.text));
+        const savedEntries = parseNovaSavedInstances(source.text);
+        const activeEntries = parseNovaActiveInstances(source.text);
+        parsed.push(...savedEntries);
+        activeRaids.push(...activeEntries);
+
+        sourceWarnings.push(
+          ...validateNovaSourceHealth({
+            fileName: source.fileName || "",
+            text: source.text,
+            parsedCharactersCount: parsedFromSource.length,
+            parsedSavedCount: savedEntries.length,
+            parsedWorldBuffCount: worldBuffStates.length
+          })
+        );
       }
 
       const dedupedParsedCharacters = new Map();
@@ -543,8 +561,9 @@ function SettingsPage() {
 
       const totalMatches = parsed.length;
       const currentRaidNames = Array.from(new Set(activeRaids.map((entry) => entry.raidName)));
+      const warningSummary = formatImportWarnings(sourceWarnings);
       setSyncMessage(
-        `Sync complete. Imported ${totalMatches} saved raid entries, ${parsedWorldBuffStates.length} buff snapshots, and added ${createdCharacters.length} new characters.${currentRaidNames.length ? ` Current raid activity: ${currentRaidNames.join(", ")}.` : ""}`
+        `Sync complete. Imported ${totalMatches} saved raid entries, ${parsedWorldBuffStates.length} buff snapshots, and added ${createdCharacters.length} new characters.${currentRaidNames.length ? ` Current raid activity: ${currentRaidNames.join(", ")}.` : ""}${warningSummary ? ` Validation warnings: ${warningSummary}.` : ""}`
       );
     } catch (error) {
       setSyncMessage("Sync failed. Ensure you selected a valid NovaInstanceTracker.lua file.");
@@ -635,24 +654,36 @@ function SettingsPage() {
       const parsedItems = [];
       const parsedInventoryProfiles = [];
       const parsedCharacterProfiles = [];
+      const sourceWarnings = [];
 
       for (const source of sources) {
         const sourceType = detectDataStoreSourceType(source.fileName, source.text);
+        let parsedFromSourceCount = 0;
+
         if (sourceType === "containers") {
-          parsedItems.push(
-            ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
-          );
+          const items = parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "");
+          parsedItems.push(...items);
+          parsedFromSourceCount = items.length;
         }
         if (sourceType === "inventory") {
-          parsedInventoryProfiles.push(
-            ...parseDataStoreInventory(source.text, source.fileName || "", source.accountHintName || "")
-          );
+          const profiles = parseDataStoreInventory(source.text, source.fileName || "", source.accountHintName || "");
+          parsedInventoryProfiles.push(...profiles);
+          parsedFromSourceCount = profiles.length;
         }
         if (sourceType === "characters") {
-          parsedCharacterProfiles.push(
-            ...parseDataStoreCharacters(source.text, source.fileName || "", source.accountHintName || "")
-          );
+          const profiles = parseDataStoreCharacters(source.text, source.fileName || "", source.accountHintName || "");
+          parsedCharacterProfiles.push(...profiles);
+          parsedFromSourceCount = profiles.length;
         }
+
+        sourceWarnings.push(
+          ...validateDataStoreSourceHealth({
+            fileName: source.fileName || "",
+            text: source.text,
+            sourceType,
+            parsedCount: parsedFromSourceCount
+          })
+        );
       }
 
       if (parsedItems.length) {
@@ -717,8 +748,9 @@ function SettingsPage() {
       }
 
       const uniqueItems = new Set(parsedItems.map((item) => `${item.itemId || ""}|${normalize(item.itemName)}`));
+      const warningSummary = formatImportWarnings(sourceWarnings);
       setBagnonSyncMessage(
-        `Sync complete. Imported ${parsedItems.length} item stacks across ${uniqueItems.size} unique item(s), ${mergedInventoryProfiles.length} equipment profile(s), and ${mergedCharacterProfiles.length} character profile snapshot(s).`
+        `Sync complete. Imported ${parsedItems.length} item stacks across ${uniqueItems.size} unique item(s), ${mergedInventoryProfiles.length} equipment profile(s), and ${mergedCharacterProfiles.length} character profile snapshot(s).${warningSummary ? ` Validation warnings: ${warningSummary}.` : ""}`
       );
     } catch (error) {
       setBagnonSyncMessage("Sync failed. Ensure you selected valid DataStore_Containers.lua, DataStore_Inventory.lua, and DataStore_Characters.lua files.");
@@ -751,6 +783,7 @@ function SettingsPage() {
       const file = await handle.getFile();
       sources.push({
         text: await file.text(),
+        fileName: file.name,
         accountHintName: selectedIndexes.length ? meta[selectedIndexes[index]]?.accountName || "" : meta[index]?.accountName || ""
       });
     }

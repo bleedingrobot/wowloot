@@ -32,6 +32,11 @@ import {
   mergeInventoryProfiles
 } from "../utils/dataStoreProfileHelpers";
 import {
+  formatImportWarnings,
+  validateDataStoreSourceHealth,
+  validateNovaSourceHealth
+} from "../utils/importHealthChecks";
+import {
   buildConnectedFileEntries as buildBagnonConnectedFileEntries,
   loadConnectedHandles as loadBagnonConnectedHandles,
   readConnectedFileMeta as readBagnonConnectedFileMeta,
@@ -567,6 +572,7 @@ function DashboardPage() {
       const parsed = [];
       const activeRaids = [];
       const parsedWorldBuffStates = [];
+      const sourceWarnings = [];
 
       for (const source of luaTexts) {
         const sourceAccount = (source.accountHintName || accountHintName || "").trim();
@@ -600,8 +606,20 @@ function DashboardPage() {
           restedXp: null,
           accountId: sourceAccountId
         })));
-        parsed.push(...parseNovaSavedInstances(source.text));
-        activeRaids.push(...parseNovaActiveInstances(source.text));
+        const savedEntries = parseNovaSavedInstances(source.text);
+        const activeEntries = parseNovaActiveInstances(source.text);
+        parsed.push(...savedEntries);
+        activeRaids.push(...activeEntries);
+
+        sourceWarnings.push(
+          ...validateNovaSourceHealth({
+            fileName: source.fileName || "",
+            text: source.text,
+            parsedCharactersCount: parsedFromSource.length,
+            parsedSavedCount: savedEntries.length,
+            parsedWorldBuffCount: worldBuffStates.length
+          })
+        );
       }
 
       const dedupedParsedCharacters = new Map();
@@ -770,7 +788,8 @@ function DashboardPage() {
       setLastSyncAt(new Date());
       setSyncStatus("success");
       if (silent) {
-        setSyncMessage(`Auto-sync complete at ${stamp}.`);
+        const warningSummary = formatImportWarnings(sourceWarnings);
+        setSyncMessage(`Auto-sync complete at ${stamp}.${warningSummary ? ` Validation warnings: ${warningSummary}.` : ""}`);
       } else {
         const createdCharacterNames = createdCharacters.map((c) => c.name).sort();
         const createdText = createdCharacterNames.length
@@ -794,9 +813,10 @@ function DashboardPage() {
         const raidActivityText = activeCharacters.length
           ? ` In raid: ${activeCharacters.join(", ")} (${currentRaidNames.join(", ")}).`
           : "";
+        const warningSummary = formatImportWarnings(sourceWarnings);
 
         setSyncMessage(
-          `Sync complete. ${createdText}${lockedText}${raidActivityText}`.trim()
+          `Sync complete. ${createdText}${lockedText}${raidActivityText}${warningSummary ? ` Validation warnings: ${warningSummary}.` : ""}`.trim()
         );
       }
     } catch (error) {
@@ -818,23 +838,35 @@ function DashboardPage() {
     const parsedItems = [];
     const parsedInventoryProfiles = [];
     const parsedCharacterProfiles = [];
+    const sourceWarnings = [];
     for (const source of luaTexts) {
       const sourceType = detectDataStoreSourceType(source.fileName, source.text);
+      let parsedFromSourceCount = 0;
+
       if (sourceType === "containers") {
-        parsedItems.push(
-          ...parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "")
-        );
+        const items = parseDataStoreContainers(source.text, source.fileName || "", source.accountHintName || "");
+        parsedItems.push(...items);
+        parsedFromSourceCount = items.length;
       }
       if (sourceType === "inventory") {
-        parsedInventoryProfiles.push(
-          ...parseDataStoreInventory(source.text, source.fileName || "", source.accountHintName || "")
-        );
+        const profiles = parseDataStoreInventory(source.text, source.fileName || "", source.accountHintName || "");
+        parsedInventoryProfiles.push(...profiles);
+        parsedFromSourceCount = profiles.length;
       }
       if (sourceType === "characters") {
-        parsedCharacterProfiles.push(
-          ...parseDataStoreCharacters(source.text, source.fileName || "", source.accountHintName || "")
-        );
+        const profiles = parseDataStoreCharacters(source.text, source.fileName || "", source.accountHintName || "");
+        parsedCharacterProfiles.push(...profiles);
+        parsedFromSourceCount = profiles.length;
       }
+
+      sourceWarnings.push(
+        ...validateDataStoreSourceHealth({
+          fileName: source.fileName || "",
+          text: source.text,
+          sourceType,
+          parsedCount: parsedFromSourceCount
+        })
+      );
     }
 
     if (!parsedItems.length && !parsedInventoryProfiles.length && !parsedCharacterProfiles.length) {
@@ -904,6 +936,11 @@ function DashboardPage() {
     if (profileOps.length) {
       await Promise.all(profileOps);
     }
+
+    const warningSummary = formatImportWarnings(sourceWarnings);
+    if (!silent && warningSummary) {
+      setSyncMessage(`Sync completed with validation warnings: ${warningSummary}.`);
+    }
   }, [user, data.characters]);
 
   const onSyncFromConnectedFiles = useCallback(async (silent = false) => {
@@ -946,6 +983,7 @@ function DashboardPage() {
         const file = await handle.getFile();
         novaSources.push({
           text: await file.text(),
+          fileName: file.name,
           accountHintName: novaSelectedIndexes.length ? novaMeta[novaSelectedIndexes[index]]?.accountName || "" : novaMeta[index]?.accountName || ""
         });
       }

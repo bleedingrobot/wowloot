@@ -74,7 +74,7 @@ function parseLuaValue(raw) {
 
 function parseItemLink(link) {
   const text = String(link || "");
-  const linkMatch = text.match(/\|Hitem:(\d+):[\s\S]*?\|h\[([\s\S]*?)\]\|h/);
+  const linkMatch = text.match(/\|Hitem:(\d+):(-?\d*):[\s\S]*?\|h\[([\s\S]*?)\]\|h/);
   if (!linkMatch) {
     return null;
   }
@@ -84,7 +84,8 @@ function parseItemLink(link) {
 
   return {
     itemId: Number(linkMatch[1]),
-    itemName: String(linkMatch[2] || "").trim(),
+    enchantId: Number.isFinite(Number(linkMatch[2])) ? Number(linkMatch[2]) : 0,
+    itemName: String(linkMatch[3] || "").trim(),
     qualityColor: color,
     quality: QUALITY_BY_COLOR[color] || "common",
     itemLink: text
@@ -151,6 +152,7 @@ export function parseDataStoreInventory(luaText, fileName = "", accountHintName 
         slot: item.slot,
         slotName: SLOT_LABELS[item.slot] || `Slot ${item.slot}`,
         itemId: item.itemId,
+        enchantId: Number.isFinite(Number(item.enchantId)) ? Number(item.enchantId) : 0,
         itemName: item.itemName || `Item #${item.itemId}`,
         itemLink: item.itemLink,
         quality: item.quality,
