@@ -51,6 +51,20 @@ export function normalizeEnchantId(value) {
   return enchantId;
 }
 
+function extractEnchantIdFromItemLink(itemLink) {
+  const text = String(itemLink || "");
+  if (!text) {
+    return 0;
+  }
+
+  const match = text.match(/(?:\|H)?item:\d+:(-?\d*)/i);
+  if (!match) {
+    return 0;
+  }
+
+  return normalizeEnchantId(match[1]);
+}
+
 export function buildWarriorSimExport(character, equippedBySlot) {
   const next = JSON.parse(JSON.stringify(warriorSimTemplate));
   const templateItems = Array.isArray(next?.player?.equipment?.items)
@@ -61,7 +75,8 @@ export function buildWarriorSimExport(character, equippedBySlot) {
   const items = WARRIOR_SIM_EQUIPMENT_ORDER.map((slot, index) => {
     const equipped = equippedBySlot.get(slot);
     const equippedId = Number(equipped?.itemId || 0);
-    const equippedEnchantId = normalizeEnchantId(equipped?.enchantId);
+    const equippedEnchantId = normalizeEnchantId(equipped?.enchantId)
+      || extractEnchantIdFromItemLink(equipped?.itemLink);
 
     if (Number.isFinite(equippedId) && equippedId > 0) {
       return equippedEnchantId > 0 ? { id: equippedId, enchant: equippedEnchantId } : { id: equippedId };

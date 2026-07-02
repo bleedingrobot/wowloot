@@ -75,19 +75,39 @@ function parseLuaValue(raw) {
 function parseItemLink(link) {
   const text = String(link || "");
   const linkMatch = text.match(/\|Hitem:(\d+):(-?\d*):[\s\S]*?\|h\[([\s\S]*?)\]\|h/);
-  if (!linkMatch) {
+  if (linkMatch) {
+    const colorMatch = text.match(/^\|cff([0-9a-fA-F]{6})\|Hitem:/);
+    const color = colorMatch ? colorMatch[1].toLowerCase() : "ffffff";
+
+    return {
+      itemId: Number(linkMatch[1]),
+      enchantId: Number.isFinite(Number(linkMatch[2])) ? Number(linkMatch[2]) : 0,
+      itemName: String(linkMatch[3] || "").trim(),
+      qualityColor: color,
+      quality: QUALITY_BY_COLOR[color] || "common",
+      itemLink: text
+    };
+  }
+
+  // DataStore variants can emit plain item strings like item:12345:1900:...
+  const rawMatch = text.match(/(?:^|\b)item:(\d+):(-?\d*)/i);
+  if (!rawMatch) {
     return null;
   }
 
-  const colorMatch = text.match(/^\|cff([0-9a-fA-F]{6})\|Hitem:/);
-  const color = colorMatch ? colorMatch[1].toLowerCase() : "ffffff";
+  const itemId = Number(rawMatch[1]);
+  if (!Number.isFinite(itemId) || itemId <= 0) {
+    return null;
+  }
+
+  const enchantId = Number(rawMatch[2]);
 
   return {
-    itemId: Number(linkMatch[1]),
-    enchantId: Number.isFinite(Number(linkMatch[2])) ? Number(linkMatch[2]) : 0,
-    itemName: String(linkMatch[3] || "").trim(),
-    qualityColor: color,
-    quality: QUALITY_BY_COLOR[color] || "common",
+    itemId,
+    enchantId: Number.isFinite(enchantId) && enchantId > 0 ? enchantId : 0,
+    itemName: "",
+    qualityColor: "ffffff",
+    quality: "common",
     itemLink: text
   };
 }
