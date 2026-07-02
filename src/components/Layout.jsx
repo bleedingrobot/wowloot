@@ -9,6 +9,7 @@ const links = [
   { to: "/inventory", label: "Inventory" },
   { to: "/shopping", label: "Shopping" },
   { to: "/sim/warrior", label: "Classic Warrior Sim" },
+  { to: "/sim/rogue", label: "Classic Rogue Sim" },
   { to: "/buff-profiles", label: "Buff Profiles" },
   { to: "/rested", label: "Rested XP" },
   { to: "/settings", label: "Settings" }

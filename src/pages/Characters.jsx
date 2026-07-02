@@ -22,6 +22,10 @@ import {
   normalizeEnchantId,
   WARRIOR_SIM_PAYLOAD_KEY
 } from "../utils/warriorSim";
+import {
+  buildRogueSimExport,
+  ROGUE_SIM_PAYLOAD_KEY
+} from "../utils/rogueSim";
 
 const EQUIPMENT_LEFT_SLOTS = [1, 2, 3, 5, 9, 10, 6, 7, 8];
 const EQUIPMENT_RIGHT_SLOTS = [11, 12, 13, 14, 15, 16, 17, 18, 19];
@@ -280,6 +284,29 @@ function CharactersPage() {
   }, [selectedCharacter]);
 
   const isSelectedCharacterWarrior = normalize(selectedCharacter?.class) === "warrior";
+  const isSelectedCharacterRogue = normalize(selectedCharacter?.class) === "rogue";
+
+  const selectedClassicSimConfig = useMemo(() => {
+    if (isSelectedCharacterWarrior) {
+      return {
+        label: "Classic Warrior",
+        buildExport: buildWarriorSimExport,
+        payloadKey: WARRIOR_SIM_PAYLOAD_KEY,
+        route: "/sim/warrior"
+      };
+    }
+
+    if (isSelectedCharacterRogue) {
+      return {
+        label: "Classic Rogue",
+        buildExport: buildRogueSimExport,
+        payloadKey: ROGUE_SIM_PAYLOAD_KEY,
+        route: "/sim/rogue"
+      };
+    }
+
+    return null;
+  }, [isSelectedCharacterRogue, isSelectedCharacterWarrior]);
 
   const selectedSpecOptions = useMemo(() => {
     if (!selectedCharacter?.class) {
@@ -545,8 +572,8 @@ function CharactersPage() {
     }
   };
 
-  const onCopyWarriorSimExport = async () => {
-    if (!selectedCharacter || !isSelectedCharacterWarrior) {
+  const onCopyClassicSimExport = async () => {
+    if (!selectedCharacter || !selectedClassicSimConfig) {
       return;
     }
 
@@ -556,7 +583,7 @@ function CharactersPage() {
     }
 
     try {
-      const { jsonText, missingSlots } = buildWarriorSimExport(selectedCharacter, selectedEquipmentBySlot);
+      const { jsonText, missingSlots } = selectedClassicSimConfig.buildExport(selectedCharacter, selectedEquipmentBySlot);
       await navigator.clipboard.writeText(jsonText);
 
       if (missingSlots.length) {
@@ -564,27 +591,27 @@ function CharactersPage() {
           .map((slot) => SLOT_LABELS[slot] || `Slot ${slot}`)
           .join(", ");
         setWarriorExportMessage(
-          `Copied Classic Warrior sim JSON. Missing worn items for: ${missingSlotLabels}. Used template fallback IDs for those slots.`
+          `Copied ${selectedClassicSimConfig.label} sim JSON. Missing worn items for: ${missingSlotLabels}. Used template fallback IDs for those slots.`
         );
         return;
       }
 
-      setWarriorExportMessage("Copied Classic Warrior sim JSON with your currently equipped item IDs.");
+      setWarriorExportMessage(`Copied ${selectedClassicSimConfig.label} sim JSON with your currently equipped item IDs.`);
     } catch {
-      setWarriorExportMessage("Failed to generate or copy Classic Warrior sim JSON. Please try again.");
+      setWarriorExportMessage(`Failed to generate or copy ${selectedClassicSimConfig.label} sim JSON. Please try again.`);
     }
   };
 
-  const onLaunchIntegratedWarriorSim = async () => {
-    if (!selectedCharacter || !isSelectedCharacterWarrior) {
+  const onLaunchIntegratedClassicSim = async () => {
+    if (!selectedCharacter || !selectedClassicSimConfig) {
       return;
     }
 
     try {
-      const { jsonText, missingSlots } = buildWarriorSimExport(selectedCharacter, selectedEquipmentBySlot);
+      const { jsonText, missingSlots } = selectedClassicSimConfig.buildExport(selectedCharacter, selectedEquipmentBySlot);
 
       try {
-        localStorage.setItem(WARRIOR_SIM_PAYLOAD_KEY, jsonText);
+        localStorage.setItem(selectedClassicSimConfig.payloadKey, jsonText);
       } catch {
         // Continue even if local storage is unavailable.
       }
@@ -597,7 +624,7 @@ function CharactersPage() {
         }
       }
 
-      navigate("/sim/warrior", {
+      navigate(selectedClassicSimConfig.route, {
         state: {
           simJsonText: jsonText,
           missingSlots,
@@ -610,14 +637,14 @@ function CharactersPage() {
           .map((slot) => SLOT_LABELS[slot] || `Slot ${slot}`)
           .join(", ");
         setWarriorExportMessage(
-          `Opened integrated sim. Missing worn items for: ${missingSlotLabels}. Template fallback IDs were used.`
+          `Opened integrated ${selectedClassicSimConfig.label} sim. Missing worn items for: ${missingSlotLabels}. Template fallback IDs were used.`
         );
         return;
       }
 
-      setWarriorExportMessage("Opened integrated sim with your currently equipped item IDs.");
+      setWarriorExportMessage(`Opened integrated ${selectedClassicSimConfig.label} sim with your currently equipped item IDs.`);
     } catch {
-      setWarriorExportMessage("Failed to prepare Warrior payload. Please try again.");
+      setWarriorExportMessage("Failed to prepare Classic sim payload. Please try again.");
     }
   };
 
@@ -752,23 +779,23 @@ function CharactersPage() {
                 >
                   {isResolvingItemNames ? "Fetching item names..." : "Fetch missing item names"}
                 </button>
-                {isSelectedCharacterWarrior ? (
+                {selectedClassicSimConfig ? (
                   <>
                     <button
                       type="button"
                       className="secondary-btn"
-                      onClick={onLaunchIntegratedWarriorSim}
+                      onClick={onLaunchIntegratedClassicSim}
                       disabled={!selectedCharacter}
                     >
-                      Open Integrated Classic Warrior Sim (Auto-Load)
+                      Open Integrated {selectedClassicSimConfig.label} Sim (Auto-Load)
                     </button>
                     <button
                       type="button"
                       className="secondary-btn"
-                      onClick={onCopyWarriorSimExport}
+                      onClick={onCopyClassicSimExport}
                       disabled={!selectedCharacter}
                     >
-                      Copy Classic Warrior Sim JSON
+                      Copy {selectedClassicSimConfig.label} Sim JSON
                     </button>
                   </>
                 ) : null}

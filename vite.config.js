@@ -6,9 +6,21 @@ const BRIDGE_SCRIPT = `
 <script>
   (function () {
     try {
-      var payloadKey = "wowloot-warrior-sim-payload";
-      var targetKey = "__classic_warrior__currentSettings__";
+      var pathMatch = window.location.pathname.match(/\/classic\/([a-z]+)/i);
+      var classSlug = pathMatch && pathMatch[1] ? pathMatch[1].toLowerCase() : "";
+      if (!classSlug) {
+        return;
+      }
+
+      var payloadKey = "wowloot-" + classSlug + "-sim-payload";
+      var targetKey = "__classic_" + classSlug + "__currentSettings__";
       var payload = window.localStorage.getItem(payloadKey);
+
+      // Backward compatibility with earlier Warrior-only payload key.
+      if ((!payload || !payload.trim()) && classSlug === "warrior") {
+        payload = window.localStorage.getItem("wowloot-warrior-sim-payload");
+      }
+
       if (payload && payload.trim()) {
         window.localStorage.setItem(targetKey, payload);
       }
