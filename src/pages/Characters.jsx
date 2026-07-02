@@ -564,14 +564,14 @@ function CharactersPage() {
           .map((slot) => SLOT_LABELS[slot] || `Slot ${slot}`)
           .join(", ");
         setWarriorExportMessage(
-          `Copied Warrior sim JSON. Missing worn items for: ${missingSlotLabels}. Used template fallback IDs for those slots.`
+          `Copied Classic Warrior sim JSON. Missing worn items for: ${missingSlotLabels}. Used template fallback IDs for those slots.`
         );
         return;
       }
 
-      setWarriorExportMessage("Copied Warrior sim JSON with your currently equipped item IDs.");
+      setWarriorExportMessage("Copied Classic Warrior sim JSON with your currently equipped item IDs.");
     } catch {
-      setWarriorExportMessage("Failed to generate or copy Warrior sim JSON. Please try again.");
+      setWarriorExportMessage("Failed to generate or copy Classic Warrior sim JSON. Please try again.");
     }
   };
 
@@ -760,7 +760,7 @@ function CharactersPage() {
                       onClick={onLaunchIntegratedWarriorSim}
                       disabled={!selectedCharacter}
                     >
-                      Open Integrated Warrior Sim (Auto-Load)
+                      Open Integrated Classic Warrior Sim (Auto-Load)
                     </button>
                     <button
                       type="button"
@@ -768,7 +768,7 @@ function CharactersPage() {
                       onClick={onCopyWarriorSimExport}
                       disabled={!selectedCharacter}
                     >
-                      Copy Warrior Sim JSON
+                      Copy Classic Warrior Sim JSON
                     </button>
                   </>
                 ) : null}

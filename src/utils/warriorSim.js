@@ -1,5 +1,8 @@
 import warriorSimTemplate from "../data/warriorSimTemplate.json";
 
+export const WOWSIMS_CLASSIC_PATH_PREFIX = "/classic";
+export const WOW_CLASSIC_LABEL = "WoW Classic";
+
 export const SLOT_LABELS = {
   1: "Head",
   2: "Neck",
@@ -24,11 +27,16 @@ export const SLOT_LABELS = {
 
 export const WARRIOR_SIM_PAYLOAD_KEY = "wowloot-warrior-sim-payload";
 
+export function getWowSimsClassicClassPath(classSlug) {
+  return `${WOWSIMS_CLASSIC_PATH_PREFIX}/${String(classSlug || "").trim().toLowerCase()}/`;
+}
+
 export function getWarriorSimUrl() {
+  const classicWarriorPath = getWowSimsClassicClassPath("warrior");
   if (typeof window !== "undefined" && window.location.hostname === "localhost") {
-    return "/wowsims/classic/warrior/";
+    return `/wowsims${classicWarriorPath}`;
   }
-  return "https://wowsims.github.io/classic/warrior/";
+  return `https://wowsims.github.io${classicWarriorPath}`;
 }
 
 const WARRIOR_SIM_EQUIPMENT_ORDER = [1, 2, 3, 15, 5, 9, 10, 6, 7, 8, 11, 12, 13, 14, 16, 17, 18];

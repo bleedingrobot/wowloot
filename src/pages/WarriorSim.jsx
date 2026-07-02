@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   SLOT_LABELS,
   WARRIOR_SIM_PAYLOAD_KEY,
+  WOW_CLASSIC_LABEL,
   getWarriorSimUrl
 } from "../utils/warriorSim";
 
@@ -63,8 +64,8 @@ function WarriorSimPage() {
     <section className="panel sim-page">
       <div className="panel-heading">
         <div>
-          <h2>Integrated Warrior Sim</h2>
-          <p className="subtitle">No file export needed. Launches WoWSims in-app with your current gear payload ready.</p>
+          <h2>Integrated {WOW_CLASSIC_LABEL} Warrior Sim</h2>
+          <p className="subtitle">No file export needed. Launches {WOW_CLASSIC_LABEL} WoWSims in-app with your current gear payload ready.</p>
         </div>
         <div className="row-actions">
           <button type="button" className="secondary-btn" onClick={() => navigate("/characters")}>Back to Characters</button>
@@ -100,7 +101,7 @@ function WarriorSimPage() {
 
       <div className="sim-embed-wrap">
         <iframe
-          title="WoWSims Classic Warrior"
+          title={`${WOW_CLASSIC_LABEL} WoWSims Warrior`}
           src={simUrl}
           className="sim-embed-frame"
           loading="lazy"
