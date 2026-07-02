@@ -30,6 +30,20 @@ const MAGE_SIM_RACE_BY_CHARACTER_RACE = {
   Troll: "RaceTroll"
 };
 
+function extractEnchantIdFromItemLink(itemLink) {
+  const text = String(itemLink || "");
+  if (!text) {
+    return 0;
+  }
+
+  const match = text.match(/(?:\|H)?item:\d+:(-?\d*)/i);
+  if (!match) {
+    return 0;
+  }
+
+  return normalizeEnchantId(match[1]);
+}
+
 function extractItemFields(equipped, fallback) {
   const item = {};
   const itemId = Number(equipped?.itemId || fallback?.id || 0);
@@ -39,7 +53,9 @@ function extractItemFields(equipped, fallback) {
 
   item.id = itemId;
 
-  const enchantId = normalizeEnchantId(equipped?.enchantId) || normalizeEnchantId(fallback?.enchant);
+  const enchantId = normalizeEnchantId(equipped?.enchantId)
+    || extractEnchantIdFromItemLink(equipped?.itemLink)
+    || normalizeEnchantId(fallback?.enchant);
   if (enchantId > 0) {
     item.enchant = enchantId;
   }
