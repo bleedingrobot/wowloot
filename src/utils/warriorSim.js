@@ -80,14 +80,19 @@ function buildSimItem(equipped, fallback) {
   }
 
   const simItem = { id: itemId };
+  const hasEquippedItem = Boolean(equipped?.itemId);
   const enchantId = normalizeEnchantId(equipped?.enchantId)
     || extractEnchantIdFromItemLink(equipped?.itemLink)
-    || normalizeEnchantId(fallback?.enchant);
+    || (!hasEquippedItem ? normalizeEnchantId(fallback?.enchant) : 0);
   if (enchantId > 0) {
     simItem.enchant = enchantId;
   }
 
-  const randomSuffixId = Number(equipped?.randomSuffixId || fallback?.randomSuffix || 0);
+  const randomSuffixId = Number(
+    equipped?.randomSuffixId
+    || (!hasEquippedItem ? fallback?.randomSuffix : 0)
+    || 0
+  );
   if (Number.isFinite(randomSuffixId) && randomSuffixId !== 0) {
     simItem.randomSuffix = randomSuffixId;
   }
