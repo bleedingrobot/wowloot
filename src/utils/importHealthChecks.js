@@ -54,31 +54,34 @@ export function validateDataStoreSourceHealth({
   const label = fileName || "Unknown DataStore file";
 
   if (sourceType === "containers") {
-    const hasMarker = body.includes("DataStore_ContainersDB");
+    const hasMarker = body.includes("DataStore_ContainersDB")
+      || body.includes("DataStore_Containers_Characters");
     if (!hasMarker) {
-      warnings.push(`${label}: missing DataStore_ContainersDB marker (format may have changed)`);
+      warnings.push(`${label}: missing DataStore containers marker (expected DataStore_ContainersDB or DataStore_Containers_Characters)`);
     } else if (parsedCount === 0) {
-      warnings.push(`${label}: containers DB detected, but no inventory item stacks were parsed`);
+      warnings.push(`${label}: containers data detected, but no inventory item stacks were parsed`);
     }
     return warnings;
   }
 
   if (sourceType === "inventory") {
-    const hasMarker = body.includes("DataStore_InventoryDB");
+    const hasMarker = body.includes("DataStore_InventoryDB")
+      || body.includes("DataStore_Inventory_Characters");
     if (!hasMarker) {
-      warnings.push(`${label}: missing DataStore_InventoryDB marker (format may have changed)`);
+      warnings.push(`${label}: missing DataStore inventory marker (expected DataStore_InventoryDB or DataStore_Inventory_Characters)`);
     } else if (parsedCount === 0) {
-      warnings.push(`${label}: inventory DB detected, but no gear profiles were parsed`);
+      warnings.push(`${label}: inventory data detected, but no gear profiles were parsed`);
     }
     return warnings;
   }
 
   if (sourceType === "characters") {
-    const hasMarker = body.includes("DataStore_CharactersDB");
+    const hasMarker = body.includes("DataStore_CharactersDB")
+      || body.includes("DataStore_Characters_Info");
     if (!hasMarker) {
-      warnings.push(`${label}: missing DataStore_CharactersDB marker (format may have changed)`);
+      warnings.push(`${label}: missing DataStore characters marker (expected DataStore_CharactersDB or DataStore_Characters_Info)`);
     } else if (parsedCount === 0) {
-      warnings.push(`${label}: characters DB detected, but no character profiles were parsed`);
+      warnings.push(`${label}: characters data detected, but no character profiles were parsed`);
     }
     return warnings;
   }

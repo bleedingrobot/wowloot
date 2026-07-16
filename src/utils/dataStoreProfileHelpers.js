@@ -23,10 +23,19 @@ export function detectDataStoreSourceType(fileName, text) {
   if (body.includes("DataStore_ContainersDB")) {
     return "containers";
   }
+  if (body.includes("DataStore_Containers_Characters")) {
+    return "containers";
+  }
   if (body.includes("DataStore_InventoryDB")) {
     return "inventory";
   }
+  if (body.includes("DataStore_Inventory_Characters")) {
+    return "inventory";
+  }
   if (body.includes("DataStore_CharactersDB")) {
+    return "characters";
+  }
+  if (body.includes("DataStore_Characters_Info")) {
     return "characters";
   }
 

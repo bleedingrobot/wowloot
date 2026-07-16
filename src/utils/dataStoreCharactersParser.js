@@ -41,8 +41,95 @@ function parseLuaValue(raw) {
   return value;
 }
 
+function parseAnonymousCharactersInfo(lines, fileName = "", accountHintName = "") {
+  const entries = [];
+  let inInfoRoot = false;
+  let braceDepth = 0;
+  let current = null;
+  let characterIndex = 0;
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    if (!inInfoRoot && /^DataStore_Characters_Info\s*=\s*\{$/.test(trimmed)) {
+      inInfoRoot = true;
+      braceDepth = 1;
+      return;
+    }
+
+    if (!inInfoRoot) {
+      return;
+    }
+
+    if (trimmed === "{" && braceDepth === 1) {
+      characterIndex += 1;
+      current = { characterIndex };
+      braceDepth += 1;
+      return;
+    }
+
+    if (current) {
+      const keyedValueMatch = trimmed.match(/^\["([^"]+)"\]\s*=\s*(.+?)(?:,)?$/);
+      if (keyedValueMatch) {
+        const field = keyedValueMatch[1];
+        const value = parseLuaValue(keyedValueMatch[2]);
+        current[field] = value;
+      }
+    }
+
+    const opens = (trimmed.match(/\{/g) || []).length;
+    const closes = (trimmed.match(/}/g) || []).length;
+
+    if (current && closes > opens && braceDepth === 2) {
+      if (current.name) {
+        entries.push({
+          characterName: current.name,
+          realm: "",
+          characterIndex: current.characterIndex,
+          accountHintName: String(accountHintName || "").trim(),
+          sourceFileName: fileName,
+          className: current.class || current.englishClass || "",
+          race: current.race || current.englishRace || "",
+          faction: current.localizedFaction || current.faction || "",
+          level: typeof current.level === "number" ? current.level : null,
+          money: typeof current.money === "number" ? current.money : null,
+          zone: current.zone || "",
+          subZone: current.subZone || "",
+          bindLocation: current.bindLocation || "",
+          guildName: current.guildName || "",
+          guildRankName: current.guildRankName || "",
+          guildRankIndex: typeof current.guildRankIndex === "number" ? current.guildRankIndex : null,
+          isResting: typeof current.isResting === "boolean" ? current.isResting : null,
+          played: typeof current.played === "number" ? current.played : null,
+          playedThisLevel: typeof current.playedThisLevel === "number" ? current.playedThisLevel : null,
+          xp: typeof current.XP === "number" ? current.XP : null,
+          xpMax: typeof current.XPMax === "number" ? current.XPMax : typeof current.maxXP === "number" ? current.maxXP : null,
+          restXp: typeof current.RestXP === "number" ? current.RestXP : typeof current.restXP === "number" ? current.restXP : null,
+          lastCharacterUpdate: typeof current.lastUpdate === "number" ? current.lastUpdate : null,
+          lastLogoutTimestamp: typeof current.lastLogoutTimestamp === "number" ? current.lastLogoutTimestamp : null
+        });
+      }
+      current = null;
+    }
+
+    braceDepth += opens - closes;
+    if (inInfoRoot && braceDepth <= 0) {
+      inInfoRoot = false;
+    }
+  });
+
+  return entries;
+}
+
 export function parseDataStoreCharacters(luaText, fileName = "", accountHintName = "") {
   const lines = String(luaText || "").split(/\r?\n/);
+  if (String(luaText || "").includes("DataStore_Characters_Info = {")) {
+    const anonymousEntries = parseAnonymousCharactersInfo(lines, fileName, accountHintName);
+    if (anonymousEntries.length) {
+      return anonymousEntries;
+    }
+  }
+
   const stack = [];
   const entries = [];
 
@@ -63,6 +150,7 @@ export function parseDataStoreCharacters(luaText, fileName = "", accountHintName
     entries.push({
       characterName: ctx.name,
       realm: ctx.realm,
+      characterIndex: null,
       accountHintName: String(accountHintName || "").trim(),
       sourceFileName: fileName,
       className: ctx.class || ctx.englishClass || "",

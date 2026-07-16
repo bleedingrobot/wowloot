@@ -145,8 +145,156 @@ function backfillUnknownItemNames(entries) {
   }));
 }
 
+function parseAnonymousInventoryEntries(lines, fileName = "", accountHintName = "") {
+  const entries = [];
+  let inRoot = false;
+  let braceDepth = 0;
+  let current = null;
+  let characterIndex = 0;
+  let inInventory = false;
+
+  const pushEntry = () => {
+    if (!current) {
+      return;
+    }
+
+    const equippedItems = (current.inventory || [])
+      .filter((item) => item && item.slot && item.itemId)
+      .map((item) => ({
+        slot: item.slot,
+        slotName: SLOT_LABELS[item.slot] || `Slot ${item.slot}`,
+        itemId: item.itemId,
+        enchantId: Number.isFinite(Number(item.enchantId)) ? Number(item.enchantId) : 0,
+        randomSuffixId: Number.isFinite(Number(item.randomSuffixId)) ? Number(item.randomSuffixId) : 0,
+        itemName: item.itemName || `Item #${item.itemId}`,
+        itemLink: item.itemLink,
+        quality: item.quality,
+        qualityColor: item.qualityColor
+      }))
+      .sort((a, b) => a.slot - b.slot);
+
+    entries.push({
+      characterName: `__anonymous_character_${current.characterIndex}`,
+      realm: "",
+      characterIndex: current.characterIndex,
+      accountHintName: String(accountHintName || "").trim(),
+      sourceFileName: fileName,
+      averageItemLevel: typeof current.averageItemLvl === "number" ? current.averageItemLvl : null,
+      overallItemLevel: typeof current.overallAIL === "number" ? current.overallAIL : null,
+      lastInventoryUpdate: typeof current.lastUpdate === "number" ? current.lastUpdate : null,
+      equippedItems
+    });
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    if (!inRoot && /^DataStore_Inventory_Characters\s*=\s*\{$/.test(trimmed)) {
+      inRoot = true;
+      braceDepth = 1;
+      return;
+    }
+
+    if (!inRoot) {
+      return;
+    }
+
+    if (trimmed === "{" && braceDepth === 1) {
+      characterIndex += 1;
+      current = {
+        characterIndex,
+        inventory: [],
+        averageItemLvl: null,
+        overallAIL: null,
+        lastUpdate: null,
+        nextSlot: 1
+      };
+      braceDepth += 1;
+      return;
+    }
+
+    if (!current) {
+      const opens = (trimmed.match(/\{/g) || []).length;
+      const closes = (trimmed.match(/}/g) || []).length;
+      braceDepth += opens - closes;
+      if (inRoot && braceDepth <= 0) {
+        inRoot = false;
+      }
+      return;
+    }
+
+    if (!inInventory && /^\["Inventory"\]\s*=\s*\{$/.test(trimmed)) {
+      inInventory = true;
+      return;
+    }
+
+    if (inInventory) {
+      if (trimmed === "}," || trimmed === "}") {
+        inInventory = false;
+      } else if (trimmed && trimmed !== "{" && trimmed !== "},") {
+        const keyedSlotMatch = trimmed.match(/^\[(\d+)\]\s*=\s*(.+?)(?:,)?$/);
+        if (keyedSlotMatch) {
+          const slot = Number(keyedSlotMatch[1]);
+          const value = parseLuaValue(keyedSlotMatch[2]);
+          const parsedLink = parseItemLink(value);
+          if (parsedLink) {
+            current.inventory.push({ slot, ...parsedLink });
+          }
+          current.nextSlot = Math.max(current.nextSlot, slot + 1);
+        } else {
+          const value = parseLuaValue(trimmed);
+          const slot = current.nextSlot;
+          current.nextSlot += 1;
+          const parsedLink = parseItemLink(value);
+          if (parsedLink) {
+            current.inventory.push({ slot, ...parsedLink });
+          }
+        }
+      }
+    }
+
+    const averageItemLvlMatch = trimmed.match(/^\["averageItemLvl"\]\s*=\s*([0-9.]+),?$/);
+    if (averageItemLvlMatch) {
+      current.averageItemLvl = Number(averageItemLvlMatch[1]);
+    }
+
+    const overallAILMatch = trimmed.match(/^\["overallAIL"\]\s*=\s*([0-9.]+),?$/);
+    if (overallAILMatch) {
+      current.overallAIL = Number(overallAILMatch[1]);
+    }
+
+    const lastUpdateMatch = trimmed.match(/^\["lastUpdate"\]\s*=\s*(\d+),?$/);
+    if (lastUpdateMatch) {
+      current.lastUpdate = Number(lastUpdateMatch[1]);
+    }
+
+    const opens = (trimmed.match(/\{/g) || []).length;
+    const closes = (trimmed.match(/}/g) || []).length;
+
+    if (!inInventory && closes > opens && braceDepth === 2) {
+      pushEntry();
+      current = null;
+    }
+
+    braceDepth += opens - closes;
+    if (inRoot && braceDepth <= 0) {
+      inRoot = false;
+      inInventory = false;
+    }
+  });
+
+  return entries;
+}
+
 export function parseDataStoreInventory(luaText, fileName = "", accountHintName = "") {
   const lines = String(luaText || "").split(/\r?\n/);
+  if (String(luaText || "").includes("DataStore_Inventory_Characters = {")) {
+    const anonymousEntries = parseAnonymousInventoryEntries(lines, fileName, accountHintName);
+    if (anonymousEntries.length) {
+      return backfillUnknownItemNames(anonymousEntries);
+    }
+  }
+
   const stack = [];
   const entries = [];
 
@@ -188,6 +336,7 @@ export function parseDataStoreInventory(luaText, fileName = "", accountHintName 
     entries.push({
       characterName: ctx.name,
       realm: ctx.realm,
+      characterIndex: null,
       accountHintName: String(accountHintName || "").trim(),
       sourceFileName: fileName,
       averageItemLevel: typeof ctx.averageItemLvl === "number" ? ctx.averageItemLvl : null,
