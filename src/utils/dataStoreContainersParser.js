@@ -519,16 +519,40 @@ export function parseDataStoreContainers(luaText, fileName = "", accountHintName
     primaryTotalsByKey.set(key, (primaryTotalsByKey.get(key) || 0) + safeCount);
   });
 
-  const alternateTotalsByKey = new Map();
+  const fallbackTotalsByKey = new Map();
+  const looseTotalsByKey = new Map();
   const alternateSampleByKey = new Map();
-  [...fallbackItems, ...looseItems].forEach((item) => {
+
+  fallbackItems.forEach((item) => {
     const key = aggregateItemKey(item);
     const parsedCount = Number(item.count);
     const safeCount = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
-    alternateTotalsByKey.set(key, (alternateTotalsByKey.get(key) || 0) + safeCount);
+    fallbackTotalsByKey.set(key, (fallbackTotalsByKey.get(key) || 0) + safeCount);
     if (!alternateSampleByKey.has(key)) {
       alternateSampleByKey.set(key, item);
     }
+  });
+
+  looseItems.forEach((item) => {
+    const key = aggregateItemKey(item);
+    const parsedCount = Number(item.count);
+    const safeCount = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
+    looseTotalsByKey.set(key, (looseTotalsByKey.get(key) || 0) + safeCount);
+    if (!alternateSampleByKey.has(key)) {
+      alternateSampleByKey.set(key, item);
+    }
+  });
+
+  const alternateTotalsByKey = new Map();
+  const allAlternateKeys = new Set([
+    ...fallbackTotalsByKey.keys(),
+    ...looseTotalsByKey.keys()
+  ]);
+
+  allAlternateKeys.forEach((key) => {
+    const fallbackTotal = fallbackTotalsByKey.get(key) || 0;
+    const looseTotal = looseTotalsByKey.get(key) || 0;
+    alternateTotalsByKey.set(key, Math.max(fallbackTotal, looseTotal));
   });
 
   const reconciled = [...primaryItems];
