@@ -1,5 +1,3 @@
-import { parseBagnonInventory } from "./bagnonInventoryParser.js";
-
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
@@ -343,7 +341,213 @@ function backfillUnknownItemNames(items) {
   });
 }
 
+function decodePackedContainerItem(raw) {
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return { itemId: null, count: null };
+  }
+
+  const itemId = Math.floor(numeric / 65536);
+  const count = numeric % 65536;
+  if (!Number.isFinite(itemId) || itemId <= 0) {
+    return { itemId: null, count: null };
+  }
+
+  return {
+    itemId,
+    count: Number.isFinite(count) && count > 0 ? count : 1
+  };
+}
+
+function parseAnonymousDataStoreContainers(luaText, fileName = "", accountHintName = "") {
+  const lines = String(luaText || "").split(/\r?\n/);
+  const items = [];
+
+  let inRoot = false;
+  let rootDepth = 0;
+  let inCharacter = false;
+  let characterDepth = 0;
+  let characterIndex = 0;
+  let inContainers = false;
+  let containersDepth = 0;
+  let bagIndex = 0;
+
+  let inBag = false;
+  let bagDepth = 0;
+  let inItemsTable = false;
+  let inLinksTable = false;
+  let nextItemSlot = 1;
+  let nextLinkSlot = 1;
+  let packedBySlot = new Map();
+  let linkBySlot = new Map();
+
+  const flushBag = () => {
+    const slotSet = new Set([...packedBySlot.keys(), ...linkBySlot.keys()]);
+    slotSet.forEach((slot) => {
+      const link = linkBySlot.get(slot);
+      const packed = packedBySlot.get(slot);
+      if (!link && (packed == null || packed === 0)) {
+        return;
+      }
+
+      const parsedLink = parseItemLink(link);
+      const packedDecoded = decodePackedContainerItem(packed);
+      const itemId = parsedLink.itemId || packedDecoded.itemId;
+      const itemName = parsedLink.itemName || "Unknown item";
+      const count = packedDecoded.count || parsedLink.stackCount || 1;
+
+      if (!Number.isFinite(itemId) || itemId <= 0) {
+        return;
+      }
+
+      items.push({
+        characterName: `__anonymous_character_${characterIndex}`,
+        realm: "",
+        characterIndex,
+        itemId,
+        itemName,
+        count,
+        locationGroup: bagIndex >= 6 ? "bank" : "bags",
+        bagKey: `Bag${Math.max(0, bagIndex - 1)}`,
+        slotIndex: slot,
+        sourceFileName: fileName,
+        accountHintName: String(accountHintName || "").trim()
+      });
+    });
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    if (!inRoot && /^DataStore_Containers_Characters\s*=\s*\{/.test(trimmed)) {
+      inRoot = true;
+      rootDepth = 1;
+      return;
+    }
+
+    const opens = (trimmed.match(/\{/g) || []).length;
+    const closes = (trimmed.match(/}/g) || []).length;
+
+    if (!inRoot) {
+      return;
+    }
+
+    if (!inCharacter && trimmed === "{" && rootDepth === 1) {
+      inCharacter = true;
+      characterDepth = 1;
+      characterIndex += 1;
+      bagIndex = 0;
+      rootDepth += 1;
+      return;
+    }
+
+    if (inCharacter) {
+      if (!inContainers && /^\["Containers"\]\s*=\s*\{/.test(trimmed)) {
+        inContainers = true;
+        containersDepth = 0;
+      } else if (inContainers && !inBag && trimmed === "{" && containersDepth === 1) {
+        inBag = true;
+        bagDepth = 0;
+        bagIndex += 1;
+        inItemsTable = false;
+        inLinksTable = false;
+        nextItemSlot = 1;
+        nextLinkSlot = 1;
+        packedBySlot = new Map();
+        linkBySlot = new Map();
+      } else if (inBag) {
+        if (!inItemsTable && /^\["items"\]\s*=\s*\{/.test(trimmed)) {
+          inItemsTable = true;
+          nextItemSlot = 1;
+        } else if (!inLinksTable && /^\["links"\]\s*=\s*\{/.test(trimmed)) {
+          inLinksTable = true;
+          nextLinkSlot = 1;
+        } else if (inItemsTable) {
+          if (trimmed === "}," || trimmed === "}") {
+            inItemsTable = false;
+          } else {
+            const keyed = trimmed.match(/^\[(\d+)\]\s*=\s*(nil|-?\d+)(?:,)?$/i);
+            if (keyed) {
+              const slot = Number(keyed[1]);
+              const value = /^nil$/i.test(keyed[2]) ? null : Number(keyed[2]);
+              if (Number.isFinite(slot) && slot > 0) {
+                packedBySlot.set(slot, value);
+              }
+              nextItemSlot = Math.max(nextItemSlot, slot + 1);
+            } else {
+              const rawValue = trimmed.replace(/,$/, "").trim();
+              if (/^nil$/i.test(rawValue)) {
+                packedBySlot.set(nextItemSlot, null);
+                nextItemSlot += 1;
+              } else {
+                const numeric = Number(rawValue);
+                if (Number.isFinite(numeric)) {
+                  packedBySlot.set(nextItemSlot, numeric);
+                }
+                nextItemSlot += 1;
+              }
+            }
+          }
+        } else if (inLinksTable) {
+          if (trimmed === "}," || trimmed === "}") {
+            inLinksTable = false;
+          } else {
+            const keyed = trimmed.match(/^\[(\d+)\]\s*=\s*"([\s\S]*?)"(?:,)?$/);
+            if (keyed) {
+              const slot = Number(keyed[1]);
+              if (Number.isFinite(slot) && slot > 0) {
+                linkBySlot.set(slot, keyed[2]);
+              }
+              nextLinkSlot = Math.max(nextLinkSlot, slot + 1);
+            } else {
+              const inline = trimmed.match(/^"([\s\S]*?)"(?:,)?$/);
+              if (inline) {
+                linkBySlot.set(nextLinkSlot, inline[1]);
+                nextLinkSlot += 1;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (inBag) {
+      bagDepth += opens - closes;
+      if (bagDepth <= 0) {
+        flushBag();
+        inBag = false;
+        inItemsTable = false;
+        inLinksTable = false;
+      }
+    } else if (inContainers) {
+      containersDepth += opens - closes;
+      if (containersDepth <= 0) {
+        inContainers = false;
+      }
+    }
+
+    if (inCharacter) {
+      characterDepth += opens - closes;
+      if (characterDepth <= 0) {
+        inCharacter = false;
+      }
+    }
+
+    rootDepth += opens - closes;
+    if (rootDepth <= 0) {
+      inRoot = false;
+      rootDepth = 0;
+    }
+  });
+
+  return backfillUnknownItemNames(items);
+}
+
 export function parseDataStoreContainers(luaText, fileName = "", accountHintName = "") {
+  if (/DataStore_Containers_Characters\s*=\s*\{/.test(String(luaText || ""))) {
+    return parseAnonymousDataStoreContainers(luaText, fileName, accountHintName);
+  }
+
   const lines = String(luaText || "").split(/\r?\n/);
   const stack = [];
   const items = [];
@@ -498,84 +702,7 @@ export function parseDataStoreContainers(luaText, fileName = "", accountHintName
     }
   });
 
-  const primaryItems = backfillUnknownItemNames(items);
-
-  const fallbackItems = backfillUnknownItemNames(parseBagnonInventory(luaText, fileName, accountHintName).map((item) => ({
-    ...item,
-    accountHintName: String(accountHintName || "").trim()
-  })));
-
-  const looseItems = backfillUnknownItemNames(extractLooseContainerItems(luaText, fileName, accountHintName));
-
-  if (!fallbackItems.length && !looseItems.length) {
-    return primaryItems;
-  }
-
-  const primaryTotalsByKey = new Map();
-  primaryItems.forEach((item) => {
-    const key = aggregateItemKey(item);
-    const parsedCount = Number(item.count);
-    const safeCount = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
-    primaryTotalsByKey.set(key, (primaryTotalsByKey.get(key) || 0) + safeCount);
-  });
-
-  const fallbackTotalsByKey = new Map();
-  const looseTotalsByKey = new Map();
-  const alternateSampleByKey = new Map();
-
-  fallbackItems.forEach((item) => {
-    const key = aggregateItemKey(item);
-    const parsedCount = Number(item.count);
-    const safeCount = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
-    fallbackTotalsByKey.set(key, (fallbackTotalsByKey.get(key) || 0) + safeCount);
-    if (!alternateSampleByKey.has(key)) {
-      alternateSampleByKey.set(key, item);
-    }
-  });
-
-  looseItems.forEach((item) => {
-    const key = aggregateItemKey(item);
-    const parsedCount = Number(item.count);
-    const safeCount = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
-    looseTotalsByKey.set(key, (looseTotalsByKey.get(key) || 0) + safeCount);
-    if (!alternateSampleByKey.has(key)) {
-      alternateSampleByKey.set(key, item);
-    }
-  });
-
-  const alternateTotalsByKey = new Map();
-  const allAlternateKeys = new Set([
-    ...fallbackTotalsByKey.keys(),
-    ...looseTotalsByKey.keys()
-  ]);
-
-  allAlternateKeys.forEach((key) => {
-    const fallbackTotal = fallbackTotalsByKey.get(key) || 0;
-    const looseTotal = looseTotalsByKey.get(key) || 0;
-    alternateTotalsByKey.set(key, Math.max(fallbackTotal, looseTotal));
-  });
-
-  const reconciled = [...primaryItems];
-  alternateTotalsByKey.forEach((fallbackTotal, key) => {
-    const primaryTotal = primaryTotalsByKey.get(key) || 0;
-    if (fallbackTotal <= primaryTotal) {
-      return;
-    }
-
-    const sample = alternateSampleByKey.get(key);
-    if (!sample) {
-      return;
-    }
-
-    reconciled.push({
-      ...sample,
-      count: fallbackTotal - primaryTotal,
-      sourceFileName: sample.sourceFileName || fileName,
-      accountHintName: String(accountHintName || sample.accountHintName || "").trim()
-    });
-  });
-
-  return backfillUnknownItemNames(reconciled);
+  return backfillUnknownItemNames(items);
 }
 
 export function summarizeInventoryItems(items, characters = [], accounts = []) {

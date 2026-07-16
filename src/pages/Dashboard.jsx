@@ -88,25 +88,11 @@ function mapAnonymousCharactersToKnownProfiles(characterProfiles, knownCharacter
     const accountKey = normalize(profile.accountHintName);
     const nameKey = normalizeLoose(profile.characterName);
     const candidates = knownByAccountAndLooseName.get(`${accountKey}|${nameKey}`) || [];
-    if (!candidates.length) {
+    if (candidates.length !== 1) {
       return profile;
     }
 
-    const matchingMoney = candidates.filter((candidate) => {
-      const candidateMoney = Number(candidate.money);
-      const profileMoney = Number(profile.money);
-      return Number.isFinite(candidateMoney) && Number.isFinite(profileMoney) && candidateMoney === profileMoney;
-    });
-
-    const resolved = matchingMoney.length === 1
-      ? matchingMoney[0]
-      : candidates.length === 1
-        ? candidates[0]
-        : null;
-
-    if (!resolved) {
-      return profile;
-    }
+    const resolved = candidates[0];
 
     return {
       ...profile,
@@ -129,22 +115,22 @@ function assignAnonymousInventoryCharacters(items, characterProfiles) {
     profileByAccountAndIndex.set(key, profile);
   });
 
-  return items.map((item) => {
+  return items.flatMap((item) => {
     if (item.characterIndex == null) {
-      return item;
+      return [item];
     }
 
     const key = `${normalize(item.accountHintName)}|${item.characterIndex}`;
     const profile = profileByAccountAndIndex.get(key);
-    if (!profile) {
-      return item;
+    if (!profile?.characterName || !profile?.realm) {
+      return [];
     }
 
-    return {
+    return [{
       ...item,
       characterName: profile.characterName,
       realm: profile.realm || item.realm || ""
-    };
+    }];
   });
 }
 
@@ -160,22 +146,34 @@ function assignAnonymousInventoryProfiles(profiles, characterProfiles) {
     profileByAccountAndIndex.set(key, profile);
   });
 
-  return profiles.map((profile) => {
+  return profiles.flatMap((profile) => {
     if (profile.characterIndex == null) {
-      return profile;
+      return [profile];
     }
 
     const key = `${normalize(profile.accountHintName)}|${profile.characterIndex}`;
     const mapped = profileByAccountAndIndex.get(key);
-    if (!mapped) {
-      return profile;
+    if (!mapped?.characterName || !mapped?.realm) {
+      return [];
     }
 
-    return {
+    return [{
       ...profile,
       characterName: mapped.characterName,
       realm: mapped.realm || profile.realm || ""
-    };
+    }];
+  });
+}
+
+function filterToKnownCharacterKeys(entries, knownKeys, nameField = "characterName", realmField = "realm") {
+  return entries.filter((entry) => {
+    const name = String(entry?.[nameField] || "").trim();
+    const realm = String(entry?.[realmField] || "").trim();
+    if (!name || !realm) {
+      return false;
+    }
+
+    return knownKeys.has(characterProfileKey(name, realm));
   });
 }
 
@@ -1004,24 +1002,33 @@ function DashboardPage() {
         parsedInventoryProfiles,
         normalizedCharacterProfiles
       );
+      const knownCharacterKeys = new Set([
+        ...data.characters.map((character) => characterProfileKey(character.name, character.realm)),
+        ...normalizedCharacterProfiles
+          .filter((profile) => profile.characterName && profile.realm)
+          .map((profile) => characterProfileKey(profile.characterName, profile.realm))
+      ]);
+      const strictParsedItems = filterToKnownCharacterKeys(normalizedParsedItems, knownCharacterKeys);
+      const strictParsedInventoryProfiles = filterToKnownCharacterKeys(normalizedParsedInventoryProfiles, knownCharacterKeys);
+      const strictCharacterProfiles = filterToKnownCharacterKeys(normalizedCharacterProfiles, knownCharacterKeys);
 
-      if (!normalizedParsedItems.length && !normalizedParsedInventoryProfiles.length && !normalizedCharacterProfiles.length) {
+      if (!strictParsedItems.length && !strictParsedInventoryProfiles.length && !strictCharacterProfiles.length) {
       if (!silent) {
         setSyncMessage("No DataStore inventory or character data was found in the selected files.");
       }
       return;
     }
 
-      if (normalizedParsedItems.length) {
-        await replaceInventoryItems(user.uid, normalizedParsedItems);
+      if (strictParsedItems.length) {
+        await replaceInventoryItems(user.uid, strictParsedItems);
     }
 
     const charactersByKey = new Map(
       data.characters.map((character) => [characterProfileKey(character.name, character.realm), character])
     );
 
-    const mergedInventoryProfiles = mergeInventoryProfiles(normalizedParsedInventoryProfiles);
-    const mergedCharacterProfiles = mergeCharacterProfiles(normalizedCharacterProfiles);
+    const mergedInventoryProfiles = mergeInventoryProfiles(strictParsedInventoryProfiles);
+    const mergedCharacterProfiles = mergeCharacterProfiles(strictCharacterProfiles);
     const profileOps = [];
 
     mergedInventoryProfiles.forEach((profile) => {
