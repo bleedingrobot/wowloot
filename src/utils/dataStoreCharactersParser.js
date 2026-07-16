@@ -123,7 +123,7 @@ function parseAnonymousCharactersInfo(lines, fileName = "", accountHintName = ""
 
 export function parseDataStoreCharacters(luaText, fileName = "", accountHintName = "") {
   const lines = String(luaText || "").split(/\r?\n/);
-  if (String(luaText || "").includes("DataStore_Characters_Info = {")) {
+  if (/DataStore_Characters_Info\s*=\s*\{/.test(String(luaText || ""))) {
     const anonymousEntries = parseAnonymousCharactersInfo(lines, fileName, accountHintName);
     if (anonymousEntries.length) {
       return anonymousEntries;

@@ -288,7 +288,7 @@ function parseAnonymousInventoryEntries(lines, fileName = "", accountHintName = 
 
 export function parseDataStoreInventory(luaText, fileName = "", accountHintName = "") {
   const lines = String(luaText || "").split(/\r?\n/);
-  if (String(luaText || "").includes("DataStore_Inventory_Characters = {")) {
+  if (/DataStore_Inventory_Characters\s*=\s*\{/.test(String(luaText || ""))) {
     const anonymousEntries = parseAnonymousInventoryEntries(lines, fileName, accountHintName);
     if (anonymousEntries.length) {
       return backfillUnknownItemNames(anonymousEntries);
