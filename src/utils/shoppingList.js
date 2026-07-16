@@ -44,12 +44,14 @@ function collectCharacterItems(inventoryItems, character, { accountName = "" } =
     })
     : inventoryItems;
 
-  const exactNameRealm = accountScopedItems.filter((item) => isCharacterMatch(item, character));
+  const candidateItems = accountScopedItems.length ? accountScopedItems : inventoryItems;
+
+  const exactNameRealm = candidateItems.filter((item) => isCharacterMatch(item, character));
   if (exactNameRealm.length) {
     return exactNameRealm;
   }
 
-  const exactNameOnly = accountScopedItems.filter(
+  const exactNameOnly = candidateItems.filter(
     (item) => normalize(item.characterName) === normalize(character.name)
   );
   if (exactNameOnly.length) {

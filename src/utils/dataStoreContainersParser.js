@@ -1,5 +1,16 @@
+import { parseBagnonInventory } from "./bagnonInventoryParser.js";
+
 function normalize(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function aggregateItemKey(item) {
+  const character = normalize(item?.characterName);
+  const realm = normalize(item?.realm);
+  const itemId = Number(item?.itemId);
+  const safeItemId = Number.isFinite(itemId) && itemId > 0 ? String(itemId) : "";
+  const itemName = normalize(item?.itemName);
+  return `${character}|${realm}|${safeItemId}|${itemName}`;
 }
 
 function normalizeLoose(value) {
@@ -41,6 +52,123 @@ function parseItemLink(link) {
   };
 }
 
+function extractInlineCount(line, fallback = 1) {
+  const matches = [
+    String(line || "").match(/\["count"\]\s*=\s*(\d+)/i),
+    String(line || "").match(/\bcount\s*=\s*(\d+)/i),
+    String(line || "").match(/\["quantity"\]\s*=\s*(\d+)/i),
+    String(line || "").match(/\bquantity\s*=\s*(\d+)/i),
+    String(line || "").match(/[;x*](\d+)\s*(?:,|$)/i)
+  ];
+
+  for (const match of matches) {
+    if (match) {
+      const parsed = Number(match[1]);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function extractLooseContainerItems(luaText, fileName = "", accountHintName = "") {
+  const lines = String(luaText || "").split(/\r?\n/);
+  const items = [];
+  let currentCharacter = {
+    name: String(accountHintName || fileName || "Unknown").replace(/\.lua$/i, "").trim() || "Unknown",
+    realm: "",
+    characterIndex: null
+  };
+  let currentBagKey = "bags";
+  let currentLocationGroup = "bags";
+  let inAnonymousCharacters = false;
+  let anonymousBraceDepth = 0;
+  let anonymousCharacterIndex = 0;
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+
+    if (!inAnonymousCharacters && /^DataStore_Containers_Characters\s*=\s*\{$/.test(trimmed)) {
+      inAnonymousCharacters = true;
+      anonymousBraceDepth = 1;
+      return;
+    }
+
+    if (inAnonymousCharacters && trimmed === "{" && anonymousBraceDepth === 1) {
+      anonymousCharacterIndex += 1;
+      currentCharacter = {
+        name: `__anonymous_character_${anonymousCharacterIndex}`,
+        realm: "",
+        characterIndex: anonymousCharacterIndex
+      };
+      anonymousBraceDepth += 1;
+      return;
+    }
+
+    const defaultCharacterMatch = trimmed.match(/^\["Default\.([^".]+)\.([^".]+)"\]\s*=\s*\{$/);
+    if (defaultCharacterMatch) {
+      currentCharacter = {
+        realm: defaultCharacterMatch[1],
+        name: defaultCharacterMatch[2],
+        characterIndex: null
+      };
+    }
+
+    const splitCharacterMatch = trimmed.match(/^\["(.+?)\s+-\s+(.+?)"\]\s*=\s*\{$/);
+    if (splitCharacterMatch) {
+      currentCharacter = {
+        name: splitCharacterMatch[1],
+        realm: splitCharacterMatch[2],
+        characterIndex: null
+      };
+    }
+
+    const bagMatch = trimmed.match(/^\["(Bag-?\d+|Bank[^"\]]*)"\]\s*=\s*\{$/i);
+    if (bagMatch) {
+      currentBagKey = bagMatch[1];
+      currentLocationGroup = /bank/i.test(currentBagKey) ? "bank" : "bags";
+    }
+
+    const itemMatches = [...trimmed.matchAll(/\|Hitem:(\d+):.*?\|h\[(.*?)\]\|h\|r(?:[;x*](\d+))?/g)];
+    if (itemMatches.length) {
+      itemMatches.forEach((match, index) => {
+        const inlineCount = Number(match[3]);
+        const safeCount = Number.isFinite(inlineCount) && inlineCount > 0
+          ? inlineCount
+          : extractInlineCount(trimmed, 1);
+
+        items.push({
+          characterName: currentCharacter.name || "Unknown",
+          realm: currentCharacter.realm || "",
+          characterIndex: currentCharacter.characterIndex ?? null,
+          itemId: Number(match[1]),
+          itemName: match[2],
+          count: safeCount,
+          locationGroup: currentLocationGroup,
+          bagKey: currentBagKey,
+          slotIndex: index + 1,
+          sourceFileName: fileName,
+          accountHintName: String(accountHintName || "").trim()
+        });
+      });
+    }
+
+    const opens = (trimmed.match(/\{/g) || []).length;
+    const closes = (trimmed.match(/}/g) || []).length;
+    if (inAnonymousCharacters) {
+      anonymousBraceDepth += opens - closes;
+      if (anonymousBraceDepth <= 0) {
+        inAnonymousCharacters = false;
+        anonymousBraceDepth = 0;
+      }
+    }
+  });
+
+  return items;
+}
+
 function parseLuaValue(raw) {
   const value = String(raw || "")
     .replace(/--.*$/, "")
@@ -69,13 +197,62 @@ function parseArrayLine(line, values) {
     return;
   }
 
-  const keyedMatch = trimmed.match(/^\[(\d+)\]\s*=\s*(.+?)(?:,)?$/);
+  const keyedMatch = trimmed.match(/^\[(?:"|')?(\d+)(?:"|')?\]\s*=\s*(.+?)(?:,)?$/);
   if (keyedMatch) {
-    values[Number(keyedMatch[1]) - 1] = parseLuaValue(keyedMatch[2]);
+    values[Number(keyedMatch[1])] = parseLuaValue(keyedMatch[2]);
     return;
   }
 
   values.push(parseLuaValue(trimmed));
+}
+
+function parseInlineTableValue(key, rawValue) {
+  const value = String(rawValue || "").trim();
+  const isTable = value.startsWith("{") && value.endsWith("}");
+
+  if (!isTable) {
+    return parseLuaValue(value);
+  }
+
+  const inner = value.slice(1, -1).trim();
+  if (!inner) {
+    return [];
+  }
+
+  const parseIndexedEntries = () => {
+    const values = [];
+    const keyedRegex = /\[(?:"|')?(\d+)(?:"|')?\]\s*=\s*("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|[^,}]+)/g;
+    let match;
+    let remainder = inner;
+
+    while ((match = keyedRegex.exec(inner)) !== null) {
+      const index = Number(match[1]);
+      if (Number.isFinite(index) && index >= 0) {
+        values[index] = parseLuaValue(match[2]);
+      }
+    }
+
+    remainder = remainder.replace(keyedRegex, "").trim();
+    if (remainder) {
+      remainder
+        .split(",")
+        .map((token) => token.trim())
+        .filter(Boolean)
+        .forEach((token) => values.push(parseLuaValue(token)));
+    }
+
+    return values;
+  };
+
+  if (key === "links") {
+    return parseIndexedEntries();
+  }
+
+  if (key === "ids" || key === "counts") {
+    return parseIndexedEntries();
+  }
+
+  return parseLuaValue(value);
 }
 
 function parseNumericToken(token) {
@@ -235,6 +412,7 @@ export function parseDataStoreContainers(luaText, fileName = "", accountHintName
 
   lines.forEach((line) => {
     const trimmed = line.trim();
+    let handledInlineBagField = false;
 
     const keyedOpen = trimmed.match(/^\["([^"]+)"\]\s*=\s*\{$/);
     if (keyedOpen) {
@@ -295,12 +473,24 @@ export function parseDataStoreContainers(luaText, fileName = "", accountHintName
       return;
     }
 
+    const keyedValueMatch = trimmed.match(/^\["([^"]+)"\]\s*=\s*(.+?)(?:,)?$/);
+    if (keyedValueMatch) {
+      const key = keyedValueMatch[1];
+      const value = keyedValueMatch[2];
+      const parent = stack[stack.length - 1];
+
+      if (parent?.type === "bag" && ["links", "ids", "counts"].includes(key)) {
+        parent[key] = parseInlineTableValue(key, value);
+        handledInlineBagField = true;
+      }
+    }
+
     const current = stack[stack.length - 1];
     if (current?.type === "array") {
       parseArrayLine(trimmed, current.values);
     }
 
-    const closes = (trimmed.match(/}/g) || []).length;
+    const closes = handledInlineBagField ? 0 : (trimmed.match(/}/g) || []).length;
     for (let index = 0; index < closes; index += 1) {
       if (stack.length) {
         closeContext();
@@ -308,7 +498,60 @@ export function parseDataStoreContainers(luaText, fileName = "", accountHintName
     }
   });
 
-  return backfillUnknownItemNames(items);
+  const primaryItems = backfillUnknownItemNames(items);
+
+  const fallbackItems = backfillUnknownItemNames(parseBagnonInventory(luaText, fileName, accountHintName).map((item) => ({
+    ...item,
+    accountHintName: String(accountHintName || "").trim()
+  })));
+
+  const looseItems = backfillUnknownItemNames(extractLooseContainerItems(luaText, fileName, accountHintName));
+
+  if (!fallbackItems.length && !looseItems.length) {
+    return primaryItems;
+  }
+
+  const primaryTotalsByKey = new Map();
+  primaryItems.forEach((item) => {
+    const key = aggregateItemKey(item);
+    const parsedCount = Number(item.count);
+    const safeCount = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
+    primaryTotalsByKey.set(key, (primaryTotalsByKey.get(key) || 0) + safeCount);
+  });
+
+  const alternateTotalsByKey = new Map();
+  const alternateSampleByKey = new Map();
+  [...fallbackItems, ...looseItems].forEach((item) => {
+    const key = aggregateItemKey(item);
+    const parsedCount = Number(item.count);
+    const safeCount = Number.isFinite(parsedCount) && parsedCount > 0 ? parsedCount : 1;
+    alternateTotalsByKey.set(key, (alternateTotalsByKey.get(key) || 0) + safeCount);
+    if (!alternateSampleByKey.has(key)) {
+      alternateSampleByKey.set(key, item);
+    }
+  });
+
+  const reconciled = [...primaryItems];
+  alternateTotalsByKey.forEach((fallbackTotal, key) => {
+    const primaryTotal = primaryTotalsByKey.get(key) || 0;
+    if (fallbackTotal <= primaryTotal) {
+      return;
+    }
+
+    const sample = alternateSampleByKey.get(key);
+    if (!sample) {
+      return;
+    }
+
+    reconciled.push({
+      ...sample,
+      count: fallbackTotal - primaryTotal,
+      sourceFileName: sample.sourceFileName || fileName,
+      accountHintName: String(accountHintName || sample.accountHintName || "").trim()
+    });
+  });
+
+  return backfillUnknownItemNames(reconciled);
 }
 
 export function summarizeInventoryItems(items, characters = [], accounts = []) {
@@ -316,7 +559,7 @@ export function summarizeInventoryItems(items, characters = [], accounts = []) {
   const characterByKey = new Map();
 
   characters.forEach((character) => {
-    const key = `${normalize(character.name)}|${normalize(character.realm)}`;
+    const key = `${normalizeLoose(character.name)}|${normalizeLoose(character.realm)}`;
     if (!characterByKey.has(key)) {
       characterByKey.set(key, []);
     }
@@ -352,10 +595,10 @@ export function summarizeInventoryItems(items, characters = [], accounts = []) {
       group.hasKnownName = true;
     }
 
-    const ownerKey = `${normalize(item.characterName)}|${normalize(item.realm)}|${normalize(item.accountHintName)}`;
+    const ownerKey = `${normalizeLoose(item.characterName)}|${normalizeLoose(item.realm)}|${normalize(item.accountHintName)}`;
 
     if (!group.owners.has(ownerKey)) {
-      const candidates = characterByKey.get(`${normalize(item.characterName)}|${normalize(item.realm)}`) || [];
+      const candidates = characterByKey.get(`${normalizeLoose(item.characterName)}|${normalizeLoose(item.realm)}`) || [];
       const hintedAccount = normalize(item.accountHintName);
       const character = candidates.find((candidate) => {
         const candidateAccount = normalize(accountNameById.get(candidate.accountId) || "");
