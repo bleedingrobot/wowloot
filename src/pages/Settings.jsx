@@ -60,6 +60,130 @@ function normalize(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function normalizeLoose(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function mapAnonymousCharactersToKnownProfiles(characterProfiles, knownCharacters, accountNameById) {
+  const knownByAccountAndLooseName = new Map();
+
+  knownCharacters.forEach((character) => {
+    const accountKey = normalize(character.accountHintName || accountNameById.get(character.accountId) || "");
+    const nameKey = normalizeLoose(character.name);
+    if (!nameKey) {
+      return;
+    }
+
+    const key = `${accountKey}|${nameKey}`;
+    if (!knownByAccountAndLooseName.has(key)) {
+      knownByAccountAndLooseName.set(key, []);
+    }
+    knownByAccountAndLooseName.get(key).push(character);
+  });
+
+  return characterProfiles.map((profile) => {
+    if (profile.realm) {
+      return profile;
+    }
+
+    const accountKey = normalize(profile.accountHintName);
+    const nameKey = normalizeLoose(profile.characterName);
+    const candidates = knownByAccountAndLooseName.get(`${accountKey}|${nameKey}`) || [];
+    if (!candidates.length) {
+      return profile;
+    }
+
+    const matchingMoney = candidates.filter((candidate) => {
+      const candidateMoney = Number(candidate.money);
+      const profileMoney = Number(profile.money);
+      return Number.isFinite(candidateMoney) && Number.isFinite(profileMoney) && candidateMoney === profileMoney;
+    });
+
+    const resolved = matchingMoney.length === 1
+      ? matchingMoney[0]
+      : candidates.length === 1
+        ? candidates[0]
+        : null;
+
+    if (!resolved) {
+      return profile;
+    }
+
+    return {
+      ...profile,
+      realm: resolved.realm || "",
+      className: profile.className || resolved.class || "",
+      faction: profile.faction || resolved.faction || ""
+    };
+  });
+}
+
+function assignAnonymousInventoryCharacters(items, characterProfiles) {
+  const profileByAccountAndIndex = new Map();
+
+  characterProfiles.forEach((profile) => {
+    if (profile.characterIndex == null) {
+      return;
+    }
+
+    const key = `${normalize(profile.accountHintName)}|${profile.characterIndex}`;
+    profileByAccountAndIndex.set(key, profile);
+  });
+
+  return items.map((item) => {
+    if (item.characterIndex == null) {
+      return item;
+    }
+
+    const key = `${normalize(item.accountHintName)}|${item.characterIndex}`;
+    const profile = profileByAccountAndIndex.get(key);
+    if (!profile) {
+      return item;
+    }
+
+    return {
+      ...item,
+      characterName: profile.characterName,
+      realm: profile.realm || item.realm || ""
+    };
+  });
+}
+
+function assignAnonymousInventoryProfiles(profiles, characterProfiles) {
+  const profileByAccountAndIndex = new Map();
+
+  characterProfiles.forEach((profile) => {
+    if (profile.characterIndex == null) {
+      return;
+    }
+
+    const key = `${normalize(profile.accountHintName)}|${profile.characterIndex}`;
+    profileByAccountAndIndex.set(key, profile);
+  });
+
+  return profiles.map((profile) => {
+    if (profile.characterIndex == null) {
+      return profile;
+    }
+
+    const key = `${normalize(profile.accountHintName)}|${profile.characterIndex}`;
+    const mapped = profileByAccountAndIndex.get(key);
+    if (!mapped) {
+      return profile;
+    }
+
+    return {
+      ...profile,
+      characterName: mapped.characterName,
+      realm: mapped.realm || profile.realm || ""
+    };
+  });
+}
+
 function characterKey(name, realm) {
   return `${normalize(name)}|${normalize(realm)}`;
 }
@@ -686,16 +810,28 @@ function SettingsPage() {
         );
       }
 
-      if (parsedItems.length) {
-        await replaceInventoryItems(user.uid, parsedItems);
+      const accountNameById = new Map(data.accounts.map((account) => [account.id, account.battleNetId]));
+      const normalizedCharacterProfiles = mapAnonymousCharactersToKnownProfiles(
+        parsedCharacterProfiles,
+        data.characters,
+        accountNameById
+      );
+      const normalizedParsedItems = assignAnonymousInventoryCharacters(parsedItems, normalizedCharacterProfiles);
+      const normalizedParsedInventoryProfiles = assignAnonymousInventoryProfiles(
+        parsedInventoryProfiles,
+        normalizedCharacterProfiles
+      );
+
+      if (normalizedParsedItems.length) {
+        await replaceInventoryItems(user.uid, normalizedParsedItems);
       }
 
       const charactersByKey = new Map(
         data.characters.map((character) => [characterProfileKey(character.name, character.realm), character])
       );
 
-      const mergedInventoryProfiles = mergeInventoryProfiles(parsedInventoryProfiles);
-      const mergedCharacterProfiles = mergeCharacterProfiles(parsedCharacterProfiles);
+      const mergedInventoryProfiles = mergeInventoryProfiles(normalizedParsedInventoryProfiles);
+      const mergedCharacterProfiles = mergeCharacterProfiles(normalizedCharacterProfiles);
       const profileOps = [];
 
       mergedInventoryProfiles.forEach((profile) => {
@@ -747,10 +883,10 @@ function SettingsPage() {
         await Promise.all(profileOps);
       }
 
-      const uniqueItems = new Set(parsedItems.map((item) => `${item.itemId || ""}|${normalize(item.itemName)}`));
+      const uniqueItems = new Set(normalizedParsedItems.map((item) => `${item.itemId || ""}|${normalize(item.itemName)}`));
       const warningSummary = formatImportWarnings(sourceWarnings);
       setBagnonSyncMessage(
-        `Sync complete. Imported ${parsedItems.length} item stacks across ${uniqueItems.size} unique item(s), ${mergedInventoryProfiles.length} equipment profile(s), and ${mergedCharacterProfiles.length} character profile snapshot(s).${warningSummary ? ` Validation warnings: ${warningSummary}.` : ""}`
+        `Sync complete. Imported ${normalizedParsedItems.length} item stacks across ${uniqueItems.size} unique item(s), ${mergedInventoryProfiles.length} equipment profile(s), and ${mergedCharacterProfiles.length} character profile snapshot(s).${warningSummary ? ` Validation warnings: ${warningSummary}.` : ""}`
       );
     } catch (error) {
       setBagnonSyncMessage("Sync failed. Ensure you selected valid DataStore_Containers.lua, DataStore_Inventory.lua, and DataStore_Characters.lua files.");
